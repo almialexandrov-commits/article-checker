@@ -17,7 +17,7 @@ os.makedirs("uploads", exist_ok=True)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # DeepSeek API key (получите на https://platform.deepseek.com)
-DEEPSEEK_API_KEY = "sk-xxxxxxxxxxxxxxxxxxxxxxxx"  # Замените на ваш ключ
+DEEPSEEK_API_KEY = "sk-2dfe45323edf45fcb88961b41cf91a7b"  # Замените на ваш ключ
 DEEPSEEK_API_URL = "https://api.deepseek.com/v1/chat/completions"
 
 @app.get("/", response_class=HTMLResponse)
