@@ -30,9 +30,6 @@
             text-align: center; 
             background: #fafafa; 
         }
-        .upload-area:hover { 
-            border-color: #800020; 
-        }
         .btn { 
             background-color: #800020; 
             color: white; 
@@ -42,31 +39,17 @@
             font-size: 16px; 
             cursor: pointer; 
             margin-top: 15px; 
-            transition: background 0.3s; 
         }
-        .btn:hover { 
-            background-color: #5a0016; 
-        }
-        .btn:disabled { 
-            background-color: #ccc; 
-            cursor: not-allowed; 
-        }
+        .btn:hover { background-color: #5a0016; }
+        .btn:disabled { background-color: #ccc; cursor: not-allowed; }
         
-        /* Результаты проверки */
-        #result { 
-            margin-top: 30px; 
-            display: none; 
-        }
+        #result { margin-top: 30px; display: none; }
         
         .summary {
             background: #f8f9fa;
             padding: 20px;
             border-radius: 8px;
             margin-bottom: 30px;
-        }
-        
-        .summary h2 {
-            margin-top: 0;
         }
         
         .stats {
@@ -81,17 +64,9 @@
             font-weight: bold;
         }
         
-        .stat-errors {
-            background: #f8d7da;
-            color: #721c24;
-        }
+        .stat-errors { background: #f8d7da; color: #721c24; }
+        .stat-warnings { background: #fff3cd; color: #856404; }
         
-        .stat-warnings {
-            background: #fff3cd;
-            color: #856404;
-        }
-        
-        /* Статья с подсветкой */
         .article-viewer {
             border: 1px solid #ddd;
             border-radius: 8px;
@@ -100,26 +75,18 @@
             margin-top: 20px;
         }
         
-        .article-viewer h3 {
-            margin-top: 0;
-            color: #800020;
-        }
-        
         .paragraph {
             margin-bottom: 15px;
             padding: 8px;
             border-radius: 3px;
-            transition: background 0.3s;
+            transition: all 0.3s;
         }
         
         .paragraph.error {
             background: #fff3cd;
             border-left: 4px solid #ffc107;
             cursor: pointer;
-        }
-        
-        .paragraph.error:hover {
-            background: #ffe69c;
+            position: relative;
         }
         
         .paragraph.error.critical {
@@ -127,7 +94,41 @@
             border-left-color: #dc3545;
         }
         
-        /* Список ошибок */
+        .paragraph.error:hover {
+            background: #ffe69c;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        }
+        
+        /* Tooltip стили */
+        .tooltip {
+            position: fixed;
+            background: #333;
+            color: white;
+            padding: 12px 16px;
+            border-radius: 6px;
+            font-size: 14px;
+            max-width: 400px;
+            z-index: 10000;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+        
+        .tooltip.show {
+            opacity: 1;
+        }
+        
+        .tooltip::after {
+            content: '';
+            position: absolute;
+            top: -8px;
+            left: 20px;
+            border-left: 8px solid transparent;
+            border-right: 8px solid transparent;
+            border-bottom: 8px solid #333;
+        }
+        
         .errors-list {
             margin-top: 30px;
         }
@@ -137,6 +138,13 @@
             border-radius: 5px;
             margin-bottom: 10px;
             border-left: 4px solid;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .error-item:hover {
+            transform: translateX(5px);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
         }
         
         .error-item.error {
@@ -157,10 +165,6 @@
         .error-category {
             font-weight: bold;
             margin-bottom: 5px;
-        }
-        
-        .error-message {
-            margin: 5px 0;
         }
         
         .error-suggestions {
@@ -212,6 +216,11 @@
         .tab-content.active {
             display: block;
         }
+        
+        .highlight-in-article {
+            background: #ffeb3b !important;
+            border: 2px solid #f57c00;
+        }
     </style>
 </head>
 <body>
@@ -229,6 +238,9 @@
 
     <div class="loader" id="loader"></div>
 
+    <!-- Tooltip элемент -->
+    <div id="tooltip" class="tooltip"></div>
+
     <div id="result">
         <div class="summary">
             <h2 id="resultTitle"></h2>
@@ -240,12 +252,12 @@
 
         <div class="tabs">
             <button class="tab active" onclick="showTab('article')">📄 Статья с пометками</button>
-            <button class="tab" onclick="showTab('errors')">📋 Список замечаний</button>
+            <button class="tab" onclick="showTab('errors')"> Список замечаний</button>
         </div>
 
         <div id="articleTab" class="tab-content active">
             <div class="article-viewer">
-                <h3>Текст статьи (проблемные места выделены)</h3>
+                <h3>Текст статьи (кликните на подсвеченные фрагменты)</h3>
                 <div id="articleContent"></div>
             </div>
         </div>
@@ -260,11 +272,8 @@
         const checkBtn = document.getElementById('checkBtn');
         const loader = document.getElementById('loader');
         const resultDiv = document.getElementById('result');
-        const resultTitle = document.getElementById('resultTitle');
-        const errorCount = document.getElementById('errorCount');
-        const warningCount = document.getElementById('warningCount');
-        const articleContent = document.getElementById('articleContent');
-        const errorsList = document.getElementById('errorsList');
+        const tooltip = document.getElementById('tooltip');
+        let allErrors = [];
 
         fileInput.addEventListener('change', () => {
             checkBtn.disabled = !fileInput.files.length;
@@ -284,6 +293,44 @@
             }
         }
 
+        function showErrorDetails(errorId) {
+            // Показываем вкладку с ошибками и подсвечиваем нужную
+            showTab('errors');
+            const errorElement = document.querySelector(`.error-item[data-error-id="${errorId}"]`);
+            if (errorElement) {
+                errorElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                errorElement.style.background = '#ffeb3b';
+                setTimeout(() => {
+                    errorElement.style.background = '';
+                }, 2000);
+            }
+        }
+
+        // Показ tooltip при наведении
+        document.addEventListener('mouseover', (e) => {
+            if (e.target.classList.contains('error')) {
+                const errorId = parseInt(e.target.getAttribute('data-error-id'));
+                const error = allErrors.find(err => err.id === errorId);
+                if (error) {
+                    tooltip.innerHTML = `<strong>${error.category}</strong><br>${error.message}`;
+                    tooltip.classList.add('show');
+                }
+            }
+        });
+
+        document.addEventListener('mouseout', (e) => {
+            if (e.target.classList.contains('error')) {
+                tooltip.classList.remove('show');
+            }
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (tooltip.classList.contains('show')) {
+                tooltip.style.left = (e.clientX + 15) + 'px';
+                tooltip.style.top = (e.clientY + 15) + 'px';
+            }
+        });
+
         async function checkFile() {
             const file = fileInput.files[0];
             if (!file) return;
@@ -301,24 +348,23 @@
 
                 if (response.ok) {
                     resultDiv.style.display = 'block';
+                    allErrors = data.errors || [];
                     
                     if (data.is_valid) {
-                        resultTitle.innerText = "✅ Грубых структурных ошибок не найдено!";
-                        resultTitle.style.color = "#155724";
+                        document.getElementById('resultTitle').innerText = "✅ Грубых структурных ошибок не найдено!";
+                        document.getElementById('resultTitle').style.color = "#155724";
                     } else {
-                        resultTitle.innerText = "⚠️ Найдены замечания к оформлению";
-                        resultTitle.style.color = "#721c24";
+                        document.getElementById('resultTitle').innerText = "⚠️ Найдены замечания к оформлению";
+                        document.getElementById('resultTitle').style.color = "#721c24";
                     }
 
-                    errorCount.innerText = `Ошибки: ${data.total_errors || 0}`;
-                    warningCount.innerText = `Предупреждения: ${data.total_warnings || 0}`;
+                    document.getElementById('errorCount').innerText = `Ошибки: ${data.total_errors || 0}`;
+                    document.getElementById('warningCount').innerText = `Предупреждения: ${data.total_warnings || 0}`;
 
-                    // Отображаем статью
                     if (data.article_html) {
-                        articleContent.innerHTML = data.article_html;
+                        document.getElementById('articleContent').innerHTML = data.article_html;
                     }
 
-                    // Отображаем список ошибок
                     let errorsHtml = '';
                     data.errors.forEach(err => {
                         let suggestionsHtml = '';
@@ -330,14 +376,14 @@
                         const icon = err.type === 'error' ? '❌' : (err.type === 'warning' ? '⚠️' : 'ℹ️');
                         
                         errorsHtml += `
-                            <div class="error-item ${errorClass}">
+                            <div class="error-item ${errorClass}" data-error-id="${err.id}" onclick="highlightInArticle(${err.id})">
                                 <div class="error-category">${icon} ${err.category}</div>
                                 <div class="error-message">${err.message}</div>
                                 ${suggestionsHtml}
                             </div>
                         `;
                     });
-                    errorsList.innerHTML = errorsHtml;
+                    document.getElementById('errorsList').innerHTML = errorsHtml;
                     
                 } else {
                     alert("Ошибка: " + data.detail);
@@ -347,6 +393,21 @@
             } finally {
                 loader.style.display = 'none';
                 checkBtn.disabled = false;
+            }
+        }
+
+        function highlightInArticle(errorId) {
+            // Убираем предыдущую подсветку
+            document.querySelectorAll('.highlight-in-article').forEach(el => {
+                el.classList.remove('highlight-in-article');
+            });
+            
+            // Подсвечиваем нужный абзац
+            const paragraph = document.querySelector(`.error-${errorId}`);
+            if (paragraph) {
+                paragraph.classList.add('highlight-in-article');
+                paragraph.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                showTab('article');
             }
         }
     </script>
