@@ -31,9 +31,6 @@
             background: linear-gradient(135deg, #fafafa 0%, #f0f0f0 100%);
             margin-bottom: 30px;
         }
-        .upload-area:hover { 
-            border-color: #800020; 
-        }
         .btn { 
             background: linear-gradient(135deg, #800020 0%, #600018 100%);
             color: white; 
@@ -44,23 +41,10 @@
             cursor: pointer; 
             margin: 15px 10px;
             transition: all 0.3s;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
         }
-        .btn:hover { 
-            transform: translateY(-2px);
-            box-shadow: 0 6px 12px rgba(0,0,0,0.2);
-        }
-        .btn:disabled { 
-            background: #ccc; 
-            cursor: not-allowed;
-            transform: none;
-        }
-        .btn-secondary {
-            background: linear-gradient(135deg, #6c757d 0%, #5a6268 100%);
-        }
-        .btn-ai {
-            background: linear-gradient(135deg, #28a745 0%, #218838 100%);
-        }
+        .btn:hover { transform: translateY(-2px); }
+        .btn:disabled { background: #ccc; cursor: not-allowed; }
+        .btn-ai { background: linear-gradient(135deg, #28a745 0%, #218838 100%); }
         
         #result { margin-top: 30px; display: none; }
         
@@ -69,7 +53,6 @@
             padding: 25px;
             border-radius: 10px;
             margin-bottom: 30px;
-            border-left: 5px solid #800020;
         }
         
         .stats {
@@ -84,14 +67,12 @@
             border-radius: 8px;
             font-weight: bold;
             font-size: 16px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
         
         .stat-errors { background: #f8d7da; color: #721c24; }
         .stat-warnings { background: #fff3cd; color: #856404; }
         .stat-success { background: #d4edda; color: #155724; }
         
-        /* Checklist styles */
         .checklist {
             background: white;
             border: 1px solid #ddd;
@@ -115,180 +96,17 @@
             border-radius: 6px;
             background: #f8f9fa;
             border-left: 4px solid #ccc;
-            transition: all 0.3s;
         }
         
-        .checklist-item:hover {
-            transform: translateX(5px);
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-        }
+        .checklist-item.success { background: #d4edda; border-left-color: #28a745; }
+        .checklist-item.warning { background: #fff3cd; border-left-color: #ffc107; }
+        .checklist-item.error { background: #f8d7da; border-left-color: #dc3545; }
         
-        .checklist-item.success {
-            background: #d4edda;
-            border-left-color: #28a745;
-        }
+        .checklist-icon { font-size: 20px; margin-right: 15px; width: 30px; }
+        .checklist-content { flex: 1; }
+        .checklist-item-name { font-weight: bold; margin-bottom: 3px; }
+        .checklist-item-details { font-size: 14px; color: #666; }
         
-        .checklist-item.warning {
-            background: #fff3cd;
-            border-left-color: #ffc107;
-        }
-        
-        .checklist-item.error {
-            background: #f8d7da;
-            border-left-color: #dc3545;
-        }
-        
-        .checklist-icon {
-            font-size: 20px;
-            margin-right: 15px;
-            width: 30px;
-            text-align: center;
-        }
-        
-        .checklist-content {
-            flex: 1;
-        }
-        
-        .checklist-item-name {
-            font-weight: bold;
-            margin-bottom: 3px;
-        }
-        
-        .checklist-item-details {
-            font-size: 14px;
-            color: #666;
-        }
-        
-        /* Article viewer */
-        .article-viewer {
-            border: 2px solid #ddd;
-            border-radius: 10px;
-            padding: 30px;
-            background: white;
-            margin-top: 20px;
-            max-height: 700px;
-            overflow-y: auto;
-            font-family: 'Times New Roman', Times, serif;
-            font-size: 12pt;
-            line-height: 1.5;
-        }
-        
-        .paragraph {
-            margin-bottom: 15px;
-            padding: 10px;
-            border-radius: 5px;
-            transition: all 0.3s;
-        }
-        
-        .paragraph.error {
-            background: #fff3cd;
-            border: 2px solid #ffc107;
-            cursor: pointer;
-        }
-        
-        .paragraph.error.critical {
-            background: #f8d7da;
-            border-color: #dc3545;
-        }
-        
-        .paragraph.error:hover {
-            background: #ffe69c;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-        }
-        
-        /* Tooltip */
-        .tooltip {
-            position: fixed;
-            background: #333;
-            color: white;
-            padding: 12px 16px;
-            border-radius: 8px;
-            font-size: 14px;
-            max-width: 450px;
-            z-index: 10000;
-            box-shadow: 0 8px 20px rgba(0,0,0,0.3);
-            pointer-events: none;
-            opacity: 0;
-            transition: opacity 0.3s;
-            font-family: 'Segoe UI', sans-serif;
-        }
-        
-        .tooltip.show {
-            opacity: 1;
-        }
-        
-        .tooltip::after {
-            content: '';
-            position: absolute;
-            top: -10px;
-            left: 20px;
-            border-left: 10px solid transparent;
-            border-right: 10px solid transparent;
-            border-bottom: 10px solid #333;
-        }
-        
-        /* Errors list */
-        .errors-list {
-            margin-top: 30px;
-        }
-        
-        .error-item {
-            padding: 18px;
-            border-radius: 8px;
-            margin-bottom: 12px;
-            border-left: 5px solid;
-            cursor: pointer;
-            transition: all 0.3s;
-            background: white;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-        }
-        
-        .error-item:hover {
-            transform: translateX(8px);
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-        }
-        
-        .error-item.error {
-            border-left-color: #dc3545;
-            background: #fff5f5;
-        }
-        
-        .error-item.warning {
-            border-left-color: #ffc107;
-            background: #fffbf0;
-        }
-        
-        .error-item.info {
-            border-left-color: #17a2b8;
-            background: #f0f9ff;
-        }
-        
-        .error-item.success {
-            border-left-color: #28a745;
-            background: #f0fff4;
-        }
-        
-        .error-category {
-            font-weight: bold;
-            margin-bottom: 8px;
-            font-size: 16px;
-        }
-        
-        .error-message {
-            margin: 8px 0;
-            line-height: 1.5;
-        }
-        
-        .error-suggestions {
-            font-style: italic;
-            color: #666;
-            margin-top: 8px;
-            padding: 8px;
-            background: rgba(0,0,0,0.03);
-            border-radius: 4px;
-        }
-        
-        /* Tabs */
         .tabs {
             display: flex;
             gap: 5px;
@@ -304,31 +122,60 @@
             cursor: pointer;
             font-size: 16px;
             font-weight: 600;
-            transition: all 0.3s;
         }
         
-        .tab:hover {
-            background: #dee2e6;
+        .tab.active { background: #800020; color: white; }
+        
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        
+        .article-viewer {
+            border: 2px solid #ddd;
+            border-radius: 10px;
+            padding: 30px;
+            background: white;
+            margin-top: 20px;
+            max-height: 700px;
+            overflow-y: auto;
+            font-family: 'Times New Roman', Times, serif;
+            font-size: 12pt;
         }
         
-        .tab.active {
-            background: #800020;
-            color: white;
+        .paragraph {
+            margin-bottom: 15px;
+            padding: 10px;
+            border-radius: 5px;
         }
         
-        .tab-content {
-            display: none;
-            animation: fadeIn 0.3s;
+        .paragraph.error {
+            background: #fff3cd;
+            border: 2px solid #ffc107;
+            cursor: pointer;
         }
         
-        .tab-content.active {
-            display: block;
+        .paragraph.error.critical {
+            background: #f8d7da;
+            border-color: #dc3545;
         }
         
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
+        .errors-list { margin-top: 30px; }
+        
+        .error-item {
+            padding: 18px;
+            border-radius: 8px;
+            margin-bottom: 12px;
+            border-left: 5px solid;
+            background: white;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
         }
+        
+        .error-item.error { border-left-color: #dc3545; }
+        .error-item.warning { border-left-color: #ffc107; }
+        .error-item.info { border-left-color: #17a2b8; }
+        .error-item.success { border-left-color: #28a745; }
+        
+        .error-category { font-weight: bold; margin-bottom: 8px; font-size: 16px; }
+        .error-suggestions { font-style: italic; color: #666; margin-top: 8px; }
         
         .loader { 
             display: none; 
@@ -341,60 +188,13 @@
             animation: spin 1s linear infinite; 
         }
         
-        @keyframes spin { 
-            0% { transform: rotate(0deg); } 
-            100% { transform: rotate(360deg); } 
-        }
-        
-        .ai-badge {
-            display: inline-block;
-            background: linear-gradient(135deg, #28a745, #20c997);
-            color: white;
-            padding: 4px 12px;
-            border-radius: 20px;
-            font-size: 12px;
-            font-weight: bold;
-            margin-left: 10px;
-        }
-        
-        .highlight-in-article {
-            background: #ffeb3b !important;
-            border: 3px solid #f57c00 !important;
-            animation: pulse 1s ease-in-out;
-        }
-        
-        @keyframes pulse {
-            0%, 100% { transform: scale(1); }
-            50% { transform: scale(1.02); }
-        }
-        
-        .options-panel {
-            background: #f8f9fa;
-            padding: 20px;
-            border-radius: 8px;
-            margin: 20px 0;
-            text-align: center;
-        }
-        
-        .option-label {
-            display: inline-flex;
-            align-items: center;
-            margin: 0 15px;
-            cursor: pointer;
-            font-size: 16px;
-        }
-        
-        .option-label input {
-            margin-right: 8px;
-            width: 18px;
-            height: 18px;
-        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
 </head>
 <body>
     <div class="header">
         <h1>🔍 Автопроверка оформления статьи</h1>
-        <p>Сервис проверки соответствия требованиям <strong>Вестника Екатеринбургской духовной семинарии</strong></p>
+        <p>Вестник Екатеринбургской духовной семинарии</p>
     </div>
 
     <div class="upload-area">
@@ -403,15 +203,11 @@
         <button id="checkBtn" class="btn" onclick="checkFile(false)" disabled>📋 Быстрая проверка</button>
         <button id="aiBtn" class="btn btn-ai" onclick="checkFile(true)" disabled>🤖 Глубокая AI-проверка</button>
         <div style="font-size: 14px; color: #666; margin-top: 15px;">
-            ⚠️ Принимаются только файлы в формате <b>.docx</b><br>
-            <small>AI-проверка занимает 10-15 секунд, но находит больше ошибок</small>
+            ️ Только .docx | AI-проверка: 10-15 сек
         </div>
     </div>
 
     <div class="loader" id="loader"></div>
-
-    <!-- Tooltip -->
-    <div id="tooltip" class="tooltip"></div>
 
     <div id="result">
         <div class="summary">
@@ -423,38 +219,26 @@
             </div>
         </div>
 
-        <!-- Checklist -->
-        <div class="checklist" id="checklistSection">
+        <div class="checklist">
             <h3>📋 Чек-лист соответствия требованиям</h3>
             <div id="checklistContent"></div>
         </div>
 
-        <!-- Tabs -->
         <div class="tabs">
-            <button class="tab active" onclick="showTab('article')">📄 Статья с пометками</button>
-            <button class="tab" onclick="showTab('errors')"> Список замечаний</button>
-            <button class="tab" onclick="showTab('ai')" id="aiTab" style="display:none;">🤖 AI-анализ</button>
+            <button class="tab active" onclick="showTab('article')">📄 Статья</button>
+            <button class="tab" onclick="showTab('results')">📊 Результаты проверки</button>
         </div>
 
-        <!-- Article Tab -->
         <div id="articleTab" class="tab-content active">
             <div class="article-viewer">
-                <h3 style="color: #800020; margin-top: 0;">📝 Текст статьи (кликните на подсвеченные фрагменты)</h3>
+                <h3 style="color: #800020; margin-top: 0;">Текст статьи (подсвечены проблемные места)</h3>
                 <div id="articleContent"></div>
             </div>
         </div>
 
-        <!-- Errors Tab -->
-        <div id="errorsTab" class="tab-content">
+        <div id="resultsTab" class="tab-content">
             <div class="errors-list" id="errorsList"></div>
-        </div>
-
-        <!-- AI Analysis Tab -->
-        <div id="aiTab" class="tab-content">
-            <div class="article-viewer" id="aiContent">
-                <h3 style="color: #28a745;">🤖 Результаты AI-анализа</h3>
-                <div id="aiAnalysisContent"></div>
-            </div>
+            <div id="aiSection" style="margin-top: 30px;"></div>
         </div>
     </div>
 
@@ -464,9 +248,6 @@
         const aiBtn = document.getElementById('aiBtn');
         const loader = document.getElementById('loader');
         const resultDiv = document.getElementById('result');
-        const tooltip = document.getElementById('tooltip');
-        let allErrors = [];
-        let checklistData = [];
 
         fileInput.addEventListener('change', () => {
             checkBtn.disabled = !fileInput.files.length;
@@ -481,51 +262,11 @@
             if (tabName === 'article') {
                 document.querySelector('.tab:nth-child(1)').classList.add('active');
                 document.getElementById('articleTab').classList.add('active');
-            } else if (tabName === 'errors') {
+            } else {
                 document.querySelector('.tab:nth-child(2)').classList.add('active');
-                document.getElementById('errorsTab').classList.add('active');
-            } else if (tabName === 'ai') {
-                document.querySelector('.tab:nth-child(3)').classList.add('active');
-                document.getElementById('aiTab').classList.add('active');
+                document.getElementById('resultsTab').classList.add('active');
             }
         }
-
-        function showErrorDetails(errorId) {
-            showTab('errors');
-            const errorElement = document.querySelector(`.error-item[data-error-id="${errorId}"]`);
-            if (errorElement) {
-                errorElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                errorElement.style.background = '#ffeb3b';
-                setTimeout(() => {
-                    errorElement.style.background = '';
-                }, 2000);
-            }
-        }
-
-        // Tooltip handlers
-        document.addEventListener('mouseover', (e) => {
-            if (e.target.classList.contains('error')) {
-                const errorId = parseInt(e.target.getAttribute('data-error-id'));
-                const error = allErrors.find(err => err.id === errorId);
-                if (error) {
-                    tooltip.innerHTML = `<strong>${error.category}</strong><br>${error.message}`;
-                    tooltip.classList.add('show');
-                }
-            }
-        });
-
-        document.addEventListener('mouseout', (e) => {
-            if (e.target.classList.contains('error')) {
-                tooltip.classList.remove('show');
-            }
-        });
-
-        document.addEventListener('mousemove', (e) => {
-            if (tooltip.classList.contains('show')) {
-                tooltip.style.left = (e.clientX + 15) + 'px';
-                tooltip.style.top = (e.clientY + 15) + 'px';
-            }
-        });
 
         async function checkFile(useAI = false) {
             const file = fileInput.files[0];
@@ -547,158 +288,89 @@
 
                 if (response.ok) {
                     resultDiv.style.display = 'block';
-                    allErrors = data.errors || [];
-                    checklistData = data.checklist || [];
                     
-                    // Update title
                     if (data.is_valid) {
-                        document.getElementById('resultTitle').innerHTML = "✅ Грубых структурных ошибок не найдено!";
+                        document.getElementById('resultTitle').innerHTML = "✅ Грубых ошибок не найдено!";
                         document.getElementById('resultTitle').style.color = "#155724";
                     } else {
-                        document.getElementById('resultTitle').innerHTML = "⚠️ Найдены замечания к оформлению";
+                        document.getElementById('resultTitle').innerHTML = "⚠️ Найдены замечания";
                         document.getElementById('resultTitle').style.color = "#721c24";
                     }
 
-                    // Update stats
-                    document.getElementById('errorCount').innerText = ` Ошибки: ${data.total_errors || 0}`;
-                    document.getElementById('warningCount').innerText = `⚠️ Предупреждения: ${data.total_warnings || 0}`;
+                    document.getElementById('errorCount').innerText = `❌ Ошибки: ${data.total_errors || 0}`;
+                    document.getElementById('warningCount').innerText = `️ Предупреждения: ${data.total_warnings || 0}`;
                     
-                    const successCount = checklistData.filter(c => c.status === 'success').length;
+                    const successCount = (data.checklist || []).filter(c => c.status === 'success').length;
                     document.getElementById('successCount').innerText = `✅ Выполнено: ${successCount}`;
 
-                    // Render checklist
-                    renderChecklist(checklistData);
+                    // Checklist
+                    const checklistHtml = (data.checklist || []).map(item => {
+                        let icon = '⚪', className = '';
+                        if (item.status === 'success') { icon = '✅'; className = 'success'; }
+                        else if (item.status === 'warning') { icon = '⚠️'; className = 'warning'; }
+                        else if (item.status === 'error') { icon = '❌'; className = 'error'; }
+                        
+                        return `
+                            <div class="checklist-item ${className}">
+                                <div class="checklist-icon">${icon}</div>
+                                <div class="checklist-content">
+                                    <div class="checklist-item-name">${item.item}</div>
+                                    <div class="checklist-item-details">${item.details}</div>
+                                </div>
+                            </div>
+                        `;
+                    }).join('');
+                    document.getElementById('checklistContent').innerHTML = checklistHtml;
 
-                    // Render article
+                    // Article
                     if (data.article_html) {
                         document.getElementById('articleContent').innerHTML = data.article_html;
                     }
 
-                    // Render errors
-                    renderErrors(data.errors);
+                    // Errors
+                    const errorsHtml = (data.errors || []).map(err => {
+                        let suggestionsHtml = '';
+                        if (err.suggestions && err.suggestions.length > 0) {
+                            suggestionsHtml = `<div class="error-suggestions">Варианты: ${err.suggestions.slice(0, 3).join(', ')}</div>`;
+                        }
+                        const icon = err.type === 'error' ? '❌' : (err.type === 'warning' ? '⚠️' : (err.type === 'success' ? '✅' : 'ℹ️'));
+                        
+                        return `
+                            <div class="error-item ${err.type}">
+                                <div class="error-category">${icon} ${err.category}</div>
+                                <div>${err.message}</div>
+                                ${suggestionsHtml}
+                            </div>
+                        `;
+                    }).join('');
+                    document.getElementById('errorsList').innerHTML = errorsHtml;
 
-                    // Show AI tab if AI was used
+                    // AI Analysis
                     if (useAI && data.ai_analysis) {
-                        document.getElementById('aiTab').style.display = 'block';
-                        renderAIAnalysis(data.ai_analysis);
-                    } else {
-                        document.getElementById('aiTab').style.display = 'none';
+                        let aiHtml = '<h3 style="color: #28a745;">🤖 AI-анализ</h3>';
+                        if (data.ai_analysis.error) {
+                            aiHtml += `<div style="color: #dc3545;">Ошибка: ${data.ai_analysis.error}</div>`;
+                        } else if (data.ai_analysis.issues && data.ai_analysis.issues.length > 0) {
+                            data.ai_analysis.issues.forEach(issue => {
+                                aiHtml += `<div class="error-item ${issue.type}" style="margin: 10px 0;">
+                                    <div class="error-category">${issue.type === 'error' ? '❌' : '⚠️'} ${issue.message}</div>
+                                </div>`;
+                            });
+                        } else {
+                            aiHtml = '<div style="color: #28a745; font-size: 18px;">✅ AI не обнаружил замечаний</div>';
+                        }
+                        document.getElementById('aiSection').innerHTML = aiHtml;
                     }
                     
                 } else {
                     alert("Ошибка: " + data.detail);
                 }
             } catch (error) {
-                alert("Произошла ошибка при соединении с сервером: " + error.message);
+                alert("Ошибка соединения: " + error.message);
             } finally {
                 loader.style.display = 'none';
                 checkBtn.disabled = false;
                 aiBtn.disabled = false;
-            }
-        }
-
-        function renderChecklist(checklist) {
-            const container = document.getElementById('checklistContent');
-            let html = '';
-            
-            checklist.forEach(item => {
-                let icon = '⚪';
-                let className = '';
-                
-                if (item.status === 'success') {
-                    icon = '✅';
-                    className = 'success';
-                } else if (item.status === 'warning') {
-                    icon = '⚠️';
-                    className = 'warning';
-                } else if (item.status === 'error') {
-                    icon = '❌';
-                    className = 'error';
-                }
-                
-                html += `
-                    <div class="checklist-item ${className}">
-                        <div class="checklist-icon">${icon}</div>
-                        <div class="checklist-content">
-                            <div class="checklist-item-name">${item.item}</div>
-                            <div class="checklist-item-details">${item.details}</div>
-                        </div>
-                    </div>
-                `;
-            });
-            
-            container.innerHTML = html;
-        }
-
-        function renderErrors(errors) {
-            const container = document.getElementById('errorsList');
-            let html = '';
-            
-            errors.forEach(err => {
-                let suggestionsHtml = '';
-                if (err.suggestions && err.suggestions.length > 0) {
-                    suggestionsHtml = `<div class="error-suggestions"> Варианты исправления: ${err.suggestions.slice(0, 3).join(', ')}</div>`;
-                }
-                
-                const icon = err.type === 'error' ? '' : (err.type === 'warning' ? '⚠️' : (err.type === 'success' ? '✅' : 'ℹ️'));
-                
-                html += `
-                    <div class="error-item ${err.type}" data-error-id="${err.id}" onclick="highlightInArticle(${err.id})">
-                        <div class="error-category">${icon} ${err.category}</div>
-                        <div class="error-message">${err.message}</div>
-                        ${suggestionsHtml}
-                    </div>
-                `;
-            });
-            
-            container.innerHTML = html;
-        }
-
-        function renderAIAnalysis(aiData) {
-            const container = document.getElementById('aiAnalysisContent');
-            
-            if (aiData.error) {
-                container.innerHTML = `<div style="color: #dc3545;">⚠️ Ошибка AI-анализа: ${aiData.error}</div>`;
-                return;
-            }
-            
-            let html = '';
-            
-            if (aiData.recommendations && aiData.recommendations.length > 0) {
-                html += '<h4>📌 Рекомендации:</h4><ul>';
-                aiData.recommendations.forEach(rec => {
-                    html += `<li>${rec}</li>`;
-                });
-                html += '</ul>';
-            }
-            
-            if (aiData.issues && aiData.issues.length > 0) {
-                html += '<h4>🔍 Найденные замечания:</h4>';
-                aiData.issues.forEach((issue, idx) => {
-                    const icon = issue.type === 'error' ? '❌' : '⚠️';
-                    html += `<div style="padding: 10px; margin: 5px 0; background: ${issue.type === 'error' ? '#f8d7da' : '#fff3cd'}; border-radius: 5px;">
-                        ${icon} ${issue.message}
-                    </div>`;
-                });
-            }
-            
-            if (!html) {
-                html = '<div style="color: #28a745; font-size: 18px;">✅ AI не обнаружил существенных замечаний к содержанию статьи</div>';
-            }
-            
-            container.innerHTML = html;
-        }
-
-        function highlightInArticle(errorId) {
-            document.querySelectorAll('.highlight-in-article').forEach(el => {
-                el.classList.remove('highlight-in-article');
-            });
-            
-            const paragraph = document.querySelector(`.error-${errorId}`);
-            if (paragraph) {
-                paragraph.classList.add('highlight-in-article');
-                paragraph.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                showTab('article');
             }
         }
     </script>
