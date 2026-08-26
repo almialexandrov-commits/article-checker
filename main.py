@@ -9,15 +9,14 @@ from fastapi.staticfiles import StaticFiles
 from docx import Document
 from docx.shared import Pt
 from docx.oxml.ns import qn
-from docx.enum.text import WD_ALIGN_PARAGRAPH
 
 app = FastAPI()
 
 os.makedirs("uploads", exist_ok=True)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-# DeepSeek API key (получите на https://platform.deepseek.com)
-DEEPSEEK_API_KEY = "sk-2dfe45323edf45fcb88961b41cf91a7b"  # Замените на ваш ключ
+# DeepSeek API key
+DEEPSEEK_API_KEY = "sk-2dfe45323edf45fcb88961b41cf91a7b"
 DEEPSEEK_API_URL = "https://api.deepseek.com/v1/chat/completions"
 
 @app.get("/", response_class=HTMLResponse)
@@ -62,41 +61,15 @@ def is_church_slavonic_or_greek(text):
     
     return False
 
-def check_footnotes_advanced(doc):
-    """Улучшенная проверка сносок через прямой доступ к XML"""
+def check_footnotes(doc):
+    """Проверяет сноски через прямой поиск в XML"""
     errors = []
     footnote_count = 0
     
     try:
-        # Метод 1: Проверяем через related_parts
-        for rel in doc.part.rels.values():
-            if "footnotes" in rel.reltype:
-                footnotes_part = rel.target_part
-                footnotes = footnotes_part.element.findall(
-                    './/w:footnote', 
-                    namespaces={'w': 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'}
-                )
-                footnote_count = len(footnotes)
-                
-                for footnote in footnotes:
-                    footnote_type = footnote.get('{http://schemas.openxmlformats.org/wordprocessingml/2006/main}type')
-                    if footnote_type == 'endnote':
-                        errors.append({
-                            "type": "error",
-                            "category": "Сноски",
-                            "message": "Обнаружены концевые сноски. Требуются постраничные (внизу страницы).",
-                            "paragraph_idx": -1
-                        })
-                        break
-                break
-        
-        # Метод 2: Ищем сноски в тексте (маркеры сносок)
-        if footnote_count == 0:
-            for para in doc.paragraphs:
-                for run in para.runs:
-                    # Ищем элементы сносок в XML
-                    if 'w:footnoteReference' in run._element.xml:
-                        footnote_count += 1
+        # Ищем ссылки на сноски в тексте (w:footnoteReference)
+        footnote_refs = doc.element.body.findall('.//' + qn('w:footnoteReference'))
+        footnote_count = len(footnote_refs)
         
         if footnote_count == 0:
             errors.append({
@@ -109,7 +82,7 @@ def check_footnotes_advanced(doc):
             errors.append({
                 "type": "success",
                 "category": "Сноски",
-                "message": f"Найдено {footnote_count} сносок. Убедитесь, что все оформлены автоматически.",
+                "message": f"Найдено {footnote_count} сносок. Проверьте оформление по ГОСТ.",
                 "paragraph_idx": -1
             })
             
@@ -186,12 +159,15 @@ def analyze_document(doc: Document, filename: str, use_ai: bool = False) -> dict
         checklist.append({"item": "Аннотация (2000-2200 знаков)", "status": "error", "details": "Не найдена"})
         error_id += 1
 
-    # 5. Проверка ключевых слов
+    # 5. Проверка ключевых слов (умный парсинг)
     kw_pattern = re.search(r'ключевые\s+слова[.\s\:]*(.+?)(?=для\s+цитирования|$)', full_text, re.IGNORECASE | re.DOTALL)
     if kw_pattern:
         kw_text = kw_pattern.group(1).strip()
-        kw_list = re.split(r'[,;]', kw_text)
-        kw_count = len([kw for kw in kw_list if kw.strip()])
+        # Разбиваем по запятым, точкам с запятой, переносам строк
+        kw_list = re.split(r'[,;\n]', kw_text)
+        kw_list = [kw.strip() for kw in kw_list if kw.strip() and len(kw.strip()) > 1]
+        kw_count = len(kw_list)
+        
         if 5 <= kw_count <= 10:
             checklist.append({"item": "Ключевые слова (5-10)", "status": "success", "details": f"{kw_count} слов"})
         else:
@@ -223,7 +199,7 @@ def analyze_document(doc: Document, filename: str, use_ai: bool = False) -> dict
         checklist.append({"item": "Шрифт Times New Roman 12 пт", "status": "warning", "details": f"Найдено: {', '.join(unique_issues)}"})
 
     # 7. Проверка сносок
-    footnote_errors, footnote_count = check_footnotes_advanced(doc)
+    footnote_errors, footnote_count = check_footnotes(doc)
     errors.extend(footnote_errors)
     if footnote_count > 0:
         checklist.append({"item": "Сноски оформлены", "status": "success", "details": f"{footnote_count} сносок"})
@@ -247,28 +223,26 @@ def analyze_document(doc: Document, filename: str, use_ai: bool = False) -> dict
         checklist.append({"item": "Список литературы", "status": "error", "details": "Не найден"})
         error_id += 1
 
-    # 9. Проверка орфографии через Яндекс
+    # 9. Проверка орфографии и пунктуации через LanguageTool
     main_text = extract_main_text(paragraphs)
-    spelling_errors = []
     if main_text:
-        spelling_errors = check_spelling_yandex_detailed(main_text)
-        if spelling_errors:
-            for err in spelling_errors[:15]:
-                errors.append({
-                    "id": error_id, "type": "warning", "category": "Орфография",
-                    "message": f"Возможная ошибка: '{err['word']}'",
-                    "suggestions": err.get('s', []),
-                    "paragraph_idx": -1
-                })
-                error_id += 1
+        grammar_errors = check_grammar_languagetool(main_text)
+        for err in grammar_errors[:20]:
+            errors.append({
+                "id": error_id, "type": "warning", "category": "Грамматика/Орфография",
+                "message": f"{err['message']} (пример: '{err['context']}')",
+                "suggestions": err.get('replacements', []),
+                "paragraph_idx": -1
+            })
+            error_id += 1
 
-    # 10. Глубокая проверка через DeepSeek AI (если включено)
+    # 10. AI-проверка (если включено)
     ai_analysis = None
-    if use_ai and DEEPSEEK_API_KEY != "sk-xxxxxxxxxxxxxxxxxxxxxxxx":
+    if use_ai and DEEPSEEK_API_KEY:
         try:
             ai_analysis = check_with_deepseek(full_text, main_text)
-            if ai_analysis:
-                for issue in ai_analysis.get('issues', []):
+            if ai_analysis and 'issues' in ai_analysis:
+                for issue in ai_analysis.get('issues', [])[:10]:
                     errors.append({
                         "id": error_id, "type": issue.get('type', 'warning'), 
                         "category": "AI-анализ",
@@ -302,41 +276,47 @@ def analyze_document(doc: Document, filename: str, use_ai: bool = False) -> dict
         "ai_analysis": ai_analysis
     }
 
+def check_grammar_languagetool(text):
+    """Проверка орфографии и пунктуации через LanguageTool API"""
+    try:
+        url = "https://api.languagetool.org/v2/check"
+        data = {
+            "text": text[:10000],
+            "language": "ru-RU",
+            "enabledOnly": "false"
+        }
+        response = requests.post(url, data=data, timeout=10)
+        result = response.json()
+        
+        errors = []
+        for match in result.get('matches', []):
+            errors.append({
+                "message": match.get('message', ''),
+                "context": match.get('context', {}).get('text', ''),
+                "replacements": [r.get('value', '') for r in match.get('replacements', [])[:3]]
+            })
+        
+        return errors
+    except Exception as e:
+        print(f"LanguageTool error: {e}")
+        return []
+
 def check_with_deepseek(full_text: str, main_text: str) -> dict:
     """Проверка статьи через DeepSeek AI"""
     
-    prompt = f"""
-Ты - редактор научного богословского журнала. Проверь статью по следующим критериям:
+    prompt = f"""Проверь текст статьи на ошибки. Найди:
+1. Орфографические и пунктуационные ошибки
+2. Грамматические ошибки
+3. Стилистические проблемы
+4. Логические несоответствия
 
-1. Орфография и пунктуация (найди реальные ошибки, игнорируя церковнославянизмы)
-2. Структура статьи (логика изложения, наличие введения и выводов)
-3. Оформление библиографических ссылок
-4. Научный стиль изложения
-5. Грамматические ошибки
+Текст:
+{main_text[:6000]}
 
-Текст статьи:
-{main_text[:8000]}  # Ограничиваем до 8000 символов
+Верни JSON:
+{{"issues": [{{"type": "error или warning", "message": "описание"}}], "critical_issues": true или false}}
 
-Верни ответ в формате JSON:
-{{
-    "issues": [
-        {{"type": "error|warning", "message": "Описание проблемы"}}
-    ],
-    "critical_issues": true/false,
-    "recommendations": ["рекомендация 1", "рекомендация 2"]
-}}
-
-Найди конкретные ошибки, например:
-- Повторы слов
-- Грамматические ошибки
-- Неправильное оформление ссылок
-- Отсутствие выводов
-
-Игнорируй:
-- Церковнославянские слова
-- Цитаты из Библии
-- Специфические богословские термины
-"""
+Найди конкретные ошибки. Игнорируй церковнославянизмы."""
 
     try:
         headers = {
@@ -347,26 +327,30 @@ def check_with_deepseek(full_text: str, main_text: str) -> dict:
         payload = {
             "model": "deepseek-chat",
             "messages": [
-                {"role": "system", "content": "Ты помощник редактора научного журнала."},
+                {"role": "system", "content": "Ты редактор научного журнала. Отвечай только валидным JSON."},
                 {"role": "user", "content": prompt}
             ],
-            "temperature": 0.3,
-            "response_format": {"type": "json_object"}
+            "temperature": 0.3
         }
         
-        response = requests.post(DEEPSEEK_API_URL, json=payload, timeout=30)
+        response = requests.post(DEEPSEEK_API_URL, json=payload, headers=headers, timeout=30)
         response.raise_for_status()
         
         result = response.json()
         content = result['choices'][0]['message']['content']
         
-        return json.loads(content)
+        # Пытаемся распарсить JSON
+        try:
+            return json.loads(content)
+        except:
+            # Если не JSON, возвращаем как есть
+            return {"issues": [{"type": "warning", "message": content}], "critical_issues": False}
         
     except Exception as e:
         return {"issues": [], "critical_issues": False, "error": str(e)}
 
 def generate_article_html(paragraphs, errors):
-    """Генерирует HTML с сохранением базового форматирования"""
+    """Генерирует HTML с сохранением форматирования"""
     html_parts = []
     
     errors_by_paragraph = {}
@@ -380,14 +364,13 @@ def generate_article_html(paragraphs, errors):
         if not p.text.strip():
             continue
         
-        # Сохраняем форматирование через runs
+        # Сохраняем форматирование
         paragraph_html = ""
         for run in p.runs:
             text = run.text
             if not text:
                 continue
             
-            # Применяем форматирование
             style = ""
             if run.font.bold:
                 style += "font-weight: bold; "
@@ -436,12 +419,3 @@ def extract_main_text(paragraphs):
         if in_body and len(p.text.strip()) > 20:
             text_parts.append(p.text)
     return " ".join(text_parts)
-
-def check_spelling_yandex_detailed(text):
-    """Детальная проверка орфографии"""
-    try:
-        url = "https://speller.yandex.net/services/spellservice.json/checkText"
-        response = requests.post(url, data={"text": text[:10000], "lang": "ru"}, timeout=5)
-        return response.json()
-    except Exception:
-        return []
