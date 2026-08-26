@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Проверка статьи | Вестник ЕДС</title>
     <style>
+        * { box-sizing: border-box; }
         body { 
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
             max-width: 1400px; 
@@ -12,25 +13,31 @@
             padding: 20px; 
             color: #333; 
             line-height: 1.6; 
+            background: #f5f5f5;
         }
         .header { 
             text-align: center; 
             margin-bottom: 30px; 
-            border-bottom: 3px solid #800020; 
-            padding-bottom: 20px; 
+            background: linear-gradient(135deg, #800020 0%, #600018 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
         }
-        .header h1 { 
-            color: #800020; 
-            margin: 0 0 10px 0; 
-        }
+        .header h1 { margin: 0 0 10px 0; font-size: 32px; }
+        .header p { margin: 0; opacity: 0.9; }
+        
         .upload-area { 
             border: 3px dashed #ccc; 
             border-radius: 10px; 
             padding: 40px; 
             text-align: center; 
-            background: linear-gradient(135deg, #fafafa 0%, #f0f0f0 100%);
+            background: white;
             margin-bottom: 30px;
+            transition: all 0.3s;
         }
+        .upload-area:hover { border-color: #800020; box-shadow: 0 4px 12px rgba(128,0,32,0.15); }
+        
         .btn { 
             background: linear-gradient(135deg, #800020 0%, #600018 100%);
             color: white; 
@@ -39,25 +46,28 @@
             border-radius: 8px; 
             font-size: 18px; 
             cursor: pointer; 
-            margin: 15px 10px;
+            margin: 10px;
             transition: all 0.3s;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
         }
-        .btn:hover { transform: translateY(-2px); }
-        .btn:disabled { background: #ccc; cursor: not-allowed; }
+        .btn:hover { transform: translateY(-2px); box-shadow: 0 6px 12px rgba(0,0,0,0.2); }
+        .btn:disabled { background: #ccc; cursor: not-allowed; transform: none; }
         .btn-ai { background: linear-gradient(135deg, #28a745 0%, #218838 100%); }
+        .btn-ai:hover { box-shadow: 0 6px 12px rgba(40,167,69,0.3); }
         
         #result { margin-top: 30px; display: none; }
         
         .summary {
-            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            background: white;
             padding: 25px;
             border-radius: 10px;
-            margin-bottom: 30px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
         }
         
         .stats {
             display: flex;
-            gap: 20px;
+            gap: 15px;
             margin: 20px 0;
             flex-wrap: wrap;
         }
@@ -67,50 +77,206 @@
             border-radius: 8px;
             font-weight: bold;
             font-size: 16px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
         
         .stat-errors { background: #f8d7da; color: #721c24; }
         .stat-warnings { background: #fff3cd; color: #856404; }
         .stat-success { background: #d4edda; color: #155724; }
         
-        .checklist {
-            background: white;
-            border: 1px solid #ddd;
-            border-radius: 8px;
-            padding: 20px;
-            margin-bottom: 30px;
+        .main-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-top: 20px;
         }
         
-        .checklist h3 {
+        @media (max-width: 1024px) {
+            .main-grid { grid-template-columns: 1fr; }
+        }
+        
+        .checklist, .errors-panel, .article-panel {
+            background: white;
+            border-radius: 10px;
+            padding: 25px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        
+        .checklist h3, .errors-panel h3, .article-panel h3 {
             margin-top: 0;
             color: #800020;
-            border-bottom: 2px solid #800020;
-            padding-bottom: 10px;
+            border-bottom: 3px solid #800020;
+            padding-bottom: 15px;
+            font-size: 22px;
         }
         
         .checklist-item {
             display: flex;
-            align-items: center;
-            padding: 12px 15px;
-            margin: 8px 0;
-            border-radius: 6px;
+            align-items: flex-start;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 8px;
             background: #f8f9fa;
-            border-left: 4px solid #ccc;
+            border-left: 5px solid #ccc;
+            transition: all 0.3s;
+        }
+        
+        .checklist-item:hover {
+            transform: translateX(5px);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
         }
         
         .checklist-item.success { background: #d4edda; border-left-color: #28a745; }
         .checklist-item.warning { background: #fff3cd; border-left-color: #ffc107; }
         .checklist-item.error { background: #f8d7da; border-left-color: #dc3545; }
         
-        .checklist-icon { font-size: 20px; margin-right: 15px; width: 30px; }
+        .checklist-icon { 
+            font-size: 24px; 
+            margin-right: 15px; 
+            width: 30px; 
+            text-align: center;
+            flex-shrink: 0;
+        }
+        
         .checklist-content { flex: 1; }
-        .checklist-item-name { font-weight: bold; margin-bottom: 3px; }
+        .checklist-item-name { font-weight: bold; margin-bottom: 5px; font-size: 16px; }
         .checklist-item-details { font-size: 14px; color: #666; }
+        
+        .error-item {
+            padding: 18px;
+            border-radius: 8px;
+            margin: 12px 0;
+            border-left: 5px solid;
+            background: #fff;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .error-item:hover {
+            transform: translateX(5px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        
+        .error-item.error { border-left-color: #dc3545; background: #fff5f5; }
+        .error-item.warning { border-left-color: #ffc107; background: #fffbf0; }
+        .error-item.info { border-left-color: #17a2b8; background: #f0f9ff; }
+        .error-item.success { border-left-color: #28a745; background: #f0fff4; }
+        
+        .error-category { 
+            font-weight: bold; 
+            margin-bottom: 8px; 
+            font-size: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .error-message { margin: 8px 0; line-height: 1.5; }
+        .error-suggestions { 
+            font-style: italic; 
+            color: #666; 
+            margin-top: 10px; 
+            padding: 10px;
+            background: rgba(0,0,0,0.03);
+            border-radius: 6px;
+            font-size: 14px;
+        }
+        
+        .article-viewer {
+            border: 2px solid #ddd;
+            border-radius: 10px;
+            padding: 30px;
+            background: white;
+            max-height: 800px;
+            overflow-y: auto;
+            font-family: 'Times New Roman', Times, serif;
+            font-size: 12pt;
+            line-height: 1.8;
+        }
+        
+        .paragraph {
+            margin-bottom: 15px;
+            padding: 12px;
+            border-radius: 6px;
+            transition: all 0.3s;
+            border: 2px solid transparent;
+        }
+        
+        .paragraph.error {
+            background: #fff3cd;
+            border-color: #ffc107;
+            cursor: pointer;
+        }
+        
+        .paragraph.error.critical {
+            background: #f8d7da;
+            border-color: #dc3545;
+        }
+        
+        .paragraph.error:hover {
+            background: #ffe69c;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        
+        .footnote-marker {
+            color: #800020;
+            font-weight: bold;
+            cursor: pointer;
+            display: inline-block;
+            padding: 0 3px;
+            border-radius: 3px;
+            transition: all 0.2s;
+        }
+        
+        .footnote-marker:hover {
+            background: #800020;
+            color: white;
+        }
+        
+        .error-badge {
+            display: inline-block;
+            background: #dc3545;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            margin-left: 8px;
+            font-weight: bold;
+        }
+        
+        .warning-badge {
+            display: inline-block;
+            background: #ffc107;
+            color: #333;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            margin-left: 8px;
+            font-weight: bold;
+        }
+        
+        .loader { 
+            display: none; 
+            margin: 40px auto; 
+            border: 6px solid #f3f3f3; 
+            border-top: 6px solid #800020; 
+            border-radius: 50%; 
+            width: 70px; 
+            height: 70px; 
+            animation: spin 1s linear infinite; 
+        }
+        
+        @keyframes spin { 
+            0% { transform: rotate(0deg); } 
+            100% { transform: rotate(360deg); } 
+        }
         
         .tabs {
             display: flex;
-            gap: 5px;
-            margin-bottom: 0;
+            gap: 10px;
+            margin-bottom: 20px;
             border-bottom: 3px solid #ddd;
         }
         
@@ -122,73 +288,59 @@
             cursor: pointer;
             font-size: 16px;
             font-weight: 600;
+            transition: all 0.3s;
         }
         
+        .tab:hover { background: #dee2e6; }
         .tab.active { background: #800020; color: white; }
         
         .tab-content { display: none; }
         .tab-content.active { display: block; }
         
-        .article-viewer {
-            border: 2px solid #ddd;
-            border-radius: 10px;
-            padding: 30px;
-            background: white;
-            margin-top: 20px;
-            max-height: 700px;
-            overflow-y: auto;
-            font-family: 'Times New Roman', Times, serif;
-            font-size: 12pt;
-        }
-        
-        .paragraph {
-            margin-bottom: 15px;
-            padding: 10px;
-            border-radius: 5px;
-        }
-        
-        .paragraph.error {
-            background: #fff3cd;
-            border: 2px solid #ffc107;
-            cursor: pointer;
-        }
-        
-        .paragraph.error.critical {
-            background: #f8d7da;
-            border-color: #dc3545;
-        }
-        
-        .errors-list { margin-top: 30px; }
-        
-        .error-item {
-            padding: 18px;
+        .tooltip {
+            position: fixed;
+            background: #333;
+            color: white;
+            padding: 12px 16px;
             border-radius: 8px;
-            margin-bottom: 12px;
-            border-left: 5px solid;
-            background: white;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            font-size: 14px;
+            max-width: 500px;
+            z-index: 10000;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.3);
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s;
         }
         
-        .error-item.error { border-left-color: #dc3545; }
-        .error-item.warning { border-left-color: #ffc107; }
-        .error-item.info { border-left-color: #17a2b8; }
-        .error-item.success { border-left-color: #28a745; }
+        .tooltip.show { opacity: 1; }
         
-        .error-category { font-weight: bold; margin-bottom: 8px; font-size: 16px; }
-        .error-suggestions { font-style: italic; color: #666; margin-top: 8px; }
-        
-        .loader { 
-            display: none; 
-            margin: 30px auto; 
-            border: 5px solid #f3f3f3; 
-            border-top: 5px solid #800020; 
-            border-radius: 50%; 
-            width: 60px; 
-            height: 60px; 
-            animation: spin 1s linear infinite; 
+        .highlight-section {
+            background: #ffeb3b !important;
+            border: 3px solid #f57c00 !important;
+            animation: pulse 1s ease-in-out;
         }
         
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.02); }
+        }
+        
+        .info-box {
+            background: #e3f2fd;
+            border-left: 5px solid #2196f3;
+            padding: 15px;
+            border-radius: 6px;
+            margin: 15px 0;
+        }
+        
+        .section-title {
+            font-size: 20px;
+            font-weight: bold;
+            color: #800020;
+            margin: 25px 0 15px 0;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #ddd;
+        }
     </style>
 </head>
 <body>
@@ -198,12 +350,12 @@
     </div>
 
     <div class="upload-area">
-        <input type="file" id="fileInput" accept=".docx" style="font-size: 18px;">
+        <input type="file" id="fileInput" accept=".docx" style="font-size: 18px; margin: 10px;">
         <br>
         <button id="checkBtn" class="btn" onclick="checkFile(false)" disabled>📋 Быстрая проверка</button>
         <button id="aiBtn" class="btn btn-ai" onclick="checkFile(true)" disabled>🤖 Глубокая AI-проверка</button>
         <div style="font-size: 14px; color: #666; margin-top: 15px;">
-            ️ Только .docx | AI-проверка: 10-15 сек
+            ⚠️ Только .docx | AI-проверка: 10-15 сек
         </div>
     </div>
 
@@ -211,7 +363,7 @@
 
     <div id="result">
         <div class="summary">
-            <h2 id="resultTitle"></h2>
+            <h2 id="resultTitle" style="margin-top: 0;"></h2>
             <div class="stats">
                 <div class="stat-item stat-errors" id="errorCount">❌ Ошибки: 0</div>
                 <div class="stat-item stat-warnings" id="warningCount">⚠️ Предупреждения: 0</div>
@@ -219,28 +371,29 @@
             </div>
         </div>
 
-        <div class="checklist">
-            <h3>📋 Чек-лист соответствия требованиям</h3>
-            <div id="checklistContent"></div>
-        </div>
+        <div class="main-grid">
+            <!-- Левая колонка: Чек-лист и Ошибки -->
+            <div>
+                <div class="checklist">
+                    <h3>📋 Чек-лист соответствия</h3>
+                    <div id="checklistContent"></div>
+                </div>
+                
+                <div class="errors-panel">
+                    <h3>⚠️ Найденные замечания</h3>
+                    <div id="errorsList"></div>
+                </div>
+            </div>
 
-        <div class="tabs">
-            <button class="tab active" onclick="showTab('article')">📄 Статья</button>
-            <button class="tab" onclick="showTab('results')">📊 Результаты проверки</button>
-        </div>
-
-        <div id="articleTab" class="tab-content active">
-            <div class="article-viewer">
-                <h3 style="color: #800020; margin-top: 0;">Текст статьи (подсвечены проблемные места)</h3>
-                <div id="articleContent"></div>
+            <!-- Правая колонка: Статья -->
+            <div class="article-panel">
+                <h3>📄 Текст статьи <span style="font-size: 14px; color: #666; font-weight: normal;">(кликните на подсвеченные фрагменты)</span></h3>
+                <div class="article-viewer" id="articleContent"></div>
             </div>
         </div>
-
-        <div id="resultsTab" class="tab-content">
-            <div class="errors-list" id="errorsList"></div>
-            <div id="aiSection" style="margin-top: 30px;"></div>
-        </div>
     </div>
+
+    <div id="tooltip" class="tooltip"></div>
 
     <script>
         const fileInput = document.getElementById('fileInput');
@@ -248,6 +401,9 @@
         const aiBtn = document.getElementById('aiBtn');
         const loader = document.getElementById('loader');
         const resultDiv = document.getElementById('result');
+        const tooltip = document.getElementById('tooltip');
+        let allErrors = [];
+        let errorMap = {};
 
         fileInput.addEventListener('change', () => {
             checkBtn.disabled = !fileInput.files.length;
@@ -255,18 +411,33 @@
             resultDiv.style.display = 'none';
         });
 
-        function showTab(tabName) {
-            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-            
-            if (tabName === 'article') {
-                document.querySelector('.tab:nth-child(1)').classList.add('active');
-                document.getElementById('articleTab').classList.add('active');
-            } else {
-                document.querySelector('.tab:nth-child(2)').classList.add('active');
-                document.getElementById('resultsTab').classList.add('active');
+        // Tooltip handlers
+        document.addEventListener('mouseover', (e) => {
+            if (e.target.classList.contains('paragraph') && e.target.classList.contains('error')) {
+                const errorIds = e.target.getAttribute('data-error-ids');
+                if (errorIds) {
+                    const errors = errorIds.split(',').map(id => allErrors.find(err => err.id == id)).filter(Boolean);
+                    if (errors.length > 0) {
+                        const content = errors.map(err => `<strong>${err.category}:</strong> ${err.message}`).join('<br>');
+                        tooltip.innerHTML = content;
+                        tooltip.classList.add('show');
+                    }
+                }
             }
-        }
+        });
+
+        document.addEventListener('mouseout', (e) => {
+            if (e.target.classList.contains('paragraph')) {
+                tooltip.classList.remove('show');
+            }
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (tooltip.classList.contains('show')) {
+                tooltip.style.left = (e.clientX + 15) + 'px';
+                tooltip.style.top = (e.clientY + 15) + 'px';
+            }
+        });
 
         async function checkFile(useAI = false) {
             const file = fileInput.files[0];
@@ -288,89 +459,136 @@
 
                 if (response.ok) {
                     resultDiv.style.display = 'block';
+                    allErrors = data.errors || [];
+                    errorMap = {};
                     
+                    // Build error map for quick lookup
+                    allErrors.forEach(err => {
+                        errorMap[err.id] = err;
+                    });
+                    
+                    // Update title
                     if (data.is_valid) {
-                        document.getElementById('resultTitle').innerHTML = "✅ Грубых ошибок не найдено!";
+                        document.getElementById('resultTitle').innerHTML = "✅ Грубых структурных ошибок не найдено!";
                         document.getElementById('resultTitle').style.color = "#155724";
                     } else {
-                        document.getElementById('resultTitle').innerHTML = "⚠️ Найдены замечания";
+                        document.getElementById('resultTitle').innerHTML = "⚠️ Найдены замечания к оформлению";
                         document.getElementById('resultTitle').style.color = "#721c24";
                     }
 
+                    // Update stats
                     document.getElementById('errorCount').innerText = `❌ Ошибки: ${data.total_errors || 0}`;
                     document.getElementById('warningCount').innerText = `️ Предупреждения: ${data.total_warnings || 0}`;
                     
                     const successCount = (data.checklist || []).filter(c => c.status === 'success').length;
                     document.getElementById('successCount').innerText = `✅ Выполнено: ${successCount}`;
 
-                    // Checklist
-                    const checklistHtml = (data.checklist || []).map(item => {
-                        let icon = '⚪', className = '';
-                        if (item.status === 'success') { icon = '✅'; className = 'success'; }
-                        else if (item.status === 'warning') { icon = '⚠️'; className = 'warning'; }
-                        else if (item.status === 'error') { icon = '❌'; className = 'error'; }
-                        
-                        return `
-                            <div class="checklist-item ${className}">
-                                <div class="checklist-icon">${icon}</div>
-                                <div class="checklist-content">
-                                    <div class="checklist-item-name">${item.item}</div>
-                                    <div class="checklist-item-details">${item.details}</div>
-                                </div>
-                            </div>
-                        `;
-                    }).join('');
-                    document.getElementById('checklistContent').innerHTML = checklistHtml;
+                    // Render checklist
+                    renderChecklist(data.checklist || []);
 
-                    // Article
+                    // Render article with inline errors
                     if (data.article_html) {
                         document.getElementById('articleContent').innerHTML = data.article_html;
                     }
 
-                    // Errors
-                    const errorsHtml = (data.errors || []).map(err => {
-                        let suggestionsHtml = '';
-                        if (err.suggestions && err.suggestions.length > 0) {
-                            suggestionsHtml = `<div class="error-suggestions">Варианты: ${err.suggestions.slice(0, 3).join(', ')}</div>`;
-                        }
-                        const icon = err.type === 'error' ? '❌' : (err.type === 'warning' ? '⚠️' : (err.type === 'success' ? '✅' : 'ℹ️'));
-                        
-                        return `
-                            <div class="error-item ${err.type}">
-                                <div class="error-category">${icon} ${err.category}</div>
-                                <div>${err.message}</div>
-                                ${suggestionsHtml}
-                            </div>
-                        `;
-                    }).join('');
-                    document.getElementById('errorsList').innerHTML = errorsHtml;
-
-                    // AI Analysis
-                    if (useAI && data.ai_analysis) {
-                        let aiHtml = '<h3 style="color: #28a745;">🤖 AI-анализ</h3>';
-                        if (data.ai_analysis.error) {
-                            aiHtml += `<div style="color: #dc3545;">Ошибка: ${data.ai_analysis.error}</div>`;
-                        } else if (data.ai_analysis.issues && data.ai_analysis.issues.length > 0) {
-                            data.ai_analysis.issues.forEach(issue => {
-                                aiHtml += `<div class="error-item ${issue.type}" style="margin: 10px 0;">
-                                    <div class="error-category">${issue.type === 'error' ? '❌' : '⚠️'} ${issue.message}</div>
-                                </div>`;
-                            });
-                        } else {
-                            aiHtml = '<div style="color: #28a745; font-size: 18px;">✅ AI не обнаружил замечаний</div>';
-                        }
-                        document.getElementById('aiSection').innerHTML = aiHtml;
-                    }
+                    // Render errors list
+                    renderErrors(data.errors || []);
                     
                 } else {
                     alert("Ошибка: " + data.detail);
                 }
             } catch (error) {
-                alert("Ошибка соединения: " + error.message);
+                alert("Произошла ошибка при соединении с сервером: " + error.message);
             } finally {
                 loader.style.display = 'none';
                 checkBtn.disabled = false;
                 aiBtn.disabled = false;
+            }
+        }
+
+        function renderChecklist(checklist) {
+            const container = document.getElementById('checklistContent');
+            let html = '';
+            
+            checklist.forEach(item => {
+                let icon = '⚪';
+                let className = '';
+                
+                if (item.status === 'success') {
+                    icon = '✅';
+                    className = 'success';
+                } else if (item.status === 'warning') {
+                    icon = '️';
+                    className = 'warning';
+                } else if (item.status === 'error') {
+                    icon = '❌';
+                    className = 'error';
+                }
+                
+                html += `
+                    <div class="checklist-item ${className}">
+                        <div class="checklist-icon">${icon}</div>
+                        <div class="checklist-content">
+                            <div class="checklist-item-name">${item.item}</div>
+                            <div class="checklist-item-details">${item.details}</div>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            container.innerHTML = html;
+        }
+
+        function renderErrors(errors) {
+            const container = document.getElementById('errorsList');
+            let html = '';
+            
+            errors.forEach(err => {
+                let suggestionsHtml = '';
+                if (err.suggestions && err.suggestions.length > 0) {
+                    suggestionsHtml = `<div class="error-suggestions">💡 Варианты исправления: ${err.suggestions.slice(0, 3).join(', ')}</div>`;
+                }
+                
+                const icon = err.type === 'error' ? '❌' : (err.type === 'warning' ? '⚠️' : (err.type === 'success' ? '✅' : 'ℹ️'));
+                
+                html += `
+                    <div class="error-item ${err.type}" onclick="highlightErrorInArticle(${err.id})">
+                        <div class="error-category">${icon} ${err.category}</div>
+                        <div class="error-message">${err.message}</div>
+                        ${suggestionsHtml}
+                    </div>
+                `;
+            });
+            
+            container.innerHTML = html;
+        }
+
+        function highlightErrorInArticle(errorId) {
+            // Remove previous highlights
+            document.querySelectorAll('.highlight-section').forEach(el => {
+                el.classList.remove('highlight-section');
+            });
+            
+            // Find and highlight the paragraph
+            const paragraph = document.querySelector(`.error-${errorId}`);
+            if (paragraph) {
+                paragraph.classList.add('highlight-section');
+                paragraph.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                
+                // Remove highlight after 3 seconds
+                setTimeout(() => {
+                    paragraph.classList.remove('highlight-section');
+                }, 3000);
+            } else {
+                // Error not in specific paragraph, show in errors list
+                const errorElement = document.querySelector(`.error-item[onclick*="${errorId}"]`);
+                if (errorElement) {
+                    errorElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    errorElement.style.background = '#ffeb3b';
+                    setTimeout(() => {
+                        errorElement.style.background = '';
+                    }, 2000);
+                }
             }
         }
     </script>
