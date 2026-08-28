@@ -2,37 +2,29 @@ import os
 import re
 import uuid
 import requests
-import json
 from fastapi import FastAPI, File, UploadFile, HTTPException
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from docx import Document
-from docx.shared import Pt
+from docx.shared import Pt, RGBColor
+from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml.ns import qn
-from datetime import datetime
 
 app = FastAPI()
 
 os.makedirs("uploads", exist_ok=True)
+os.makedirs("processed", exist_ok=True)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-# DeepSeek API key
-DEEPSEEK_API_KEY = "sk-2dfe45323edf45fcb88961b41cf91a7b"
-DEEPSEEK_API_URL = "https://api.deepseek.com/v1/chat/completions"
-
-# Журнал для проверки
-JOURNAL_NAME = "Вестник Екатеринбургской духовной семинарии"
-JOURNAL_URL = "https://journals.epds.ru/index.php/VEDS/about/submissions"
-
-# Библейские сокращения (игнорировать при проверке орфографии)
-BIBLE_ABBREVIATIONS = {
-    'Быт', 'Исх', 'Лев', 'Чис', 'Втор', 'Нав', 'Суд', 'Руф', '1Цар', '2Цар', '3Цар', '4Цар',
-    '1Пар', '2Пар', '1Ездр', 'Ездр', 'Неем', 'Есф', 'Иов', 'Пс', 'Притч', 'Еккл', 'Песн',
-    'Прем', 'Сир', 'Ис', 'Иер', 'Плач', 'Посл', 'Иез', 'Дан', 'Ос', 'Иоил', 'Ам', 'Авд',
-    'Иона', 'Мих', 'Наум', 'Авв', 'Соф', 'Агг', 'Зах', 'Мал', '1Макк', '2Макк', '3Макк',
+# Список библейских сокращений для игнорирования в проверке орфографии
+BIBLE_ABBR = {
     'Мф', 'Мк', 'Лк', 'Ин', 'Деян', 'Рим', '1Кор', '2Кор', 'Гал', 'Еф', 'Флп', 'Кол',
     '1Фес', '2Фес', '1Тим', '2Тим', 'Тит', 'Флм', 'Евр', 'Иак', '1Пет', '2Пет', '1Ин',
-    '2Ин', '3Ин', 'Иуд', 'Откр', 'Апок'
+    '2Ин', '3Ин', 'Иуд', 'Откр', 'Апок', 'Быт', 'Исх', 'Лев', 'Чис', 'Втор', 'Нав', 
+    'Суд', 'Руф', '1Цар', '2Цар', '3Цар', '4Цар', '1Пар', '2Пар', 'Ездр', 'Неем', 
+    'Есф', 'Иов', 'Пс', 'Притч', 'Еккл', 'Песн', 'Прем', 'Сир', 'Ис', 'Иер', 'Плач', 
+    'Иез', 'Дан', 'Ос', 'Иоил', 'Ам', 'Авд', 'Иона', 'Мих', 'Наум', 'Авв', 'Соф', 
+    'Агг', 'Зах', 'Мал', '1Макк', '2Макк', '3Макк'
 }
 
 @app.get("/", response_class=HTMLResponse)
@@ -41,228 +33,166 @@ async def read_index():
         return f.read()
 
 @app.post("/check")
-async def check_article(file: UploadFile = File(...), use_ai: bool = False):
+async def check_article(file: UploadFile = File(...)):
     if not file.filename.endswith('.docx'):
         raise HTTPException(status_code=400, detail="Принимаются только файлы в формате .docx")
 
     file_id = str(uuid.uuid4())
-    file_path = f"uploads/{file_id}.docx"
+    input_path = f"uploads/{file_id}.docx"
+    output_path = f"processed/{file_id}_checked.docx"
     
-    with open(file_path, "wb") as buffer:
-        content = await file.read()
-        buffer.write(content)
+    with open(input_path, "wb") as buffer:
+        buffer.write(await file.read())
 
     try:
-        doc = Document(file_path)
-        report = analyze_document(doc, file.filename, use_ai)
+        doc = Document(input_path)
+        report, doc = analyze_and_modify_document(doc, file.filename)
+        doc.save(output_path)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Ошибка чтения файла: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Ошибка обработки: {str(e)}")
     finally:
-        if os.path.exists(file_path):
-            os.remove(file_path)
+        if os.path.exists(input_path):
+            os.remove(input_path)
 
-    return report
+    return {
+        "filename": file.filename,
+        "download_url": f"/download/{file_id}",
+        "report": report
+    }
+
+@app.get("/download/{file_id}")
+async def download_file(file_id: str):
+    file_path = f"processed/{file_id}_checked.docx"
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="Файл не найден")
+    return FileResponse(file_path, filename="article_checked.docx", media_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document')
 
 def is_church_slavonic_or_greek(text):
-    """Проверяет церковнославянские и греческие символы"""
-    greek_pattern = r'[\u0370-\u03FF\u1F00-\u1FFF]'
-    church_slavonic_pattern = r'[ѣѢѳѲѵѴѧѧѩѫѭѯѱ]'
-    
-    if re.search(greek_pattern, text) or re.search(church_slavonic_pattern, text):
-        return True
-    
-    church_endings = r'\b\w+(овъ|евъ|інъ|їнъ|іе|їе)\b'
-    if re.search(church_endings, text, re.IGNORECASE):
-        return True
-    
+    if re.search(r'[\u0370-\u03FF\u1F00-\u1FFF]', text): return True # Греческий
+    if re.search(r'[ѣѢѳѲѵѴѧѩѫѭѯѱ\u0480-\u04FF]', text): return True # Церковнославянский
+    if re.search(r'\b\w+(овъ|евъ|інъ|їнъ|іе|їе|h)\b', text, re.IGNORECASE): return True
     return False
 
-def check_footnotes(doc):
-    """Проверяет сноски через прямой поиск в XML"""
-    errors = []
-    footnote_count = 0
-    footnote_positions = []
-    
-    try:
-        # Ищем ссылки на сноски в тексте
-        footnote_refs = doc.element.body.findall('.//' + qn('w:footnoteReference'))
-        footnote_count = len(footnote_refs)
-        
-        # Получаем информацию о сносках
-        for i, ref in enumerate(footnote_refs):
-            footnote_id = ref.get('{http://schemas.openxmlformats.org/wordprocessingml/2006/main}id')
-            footnote_positions.append({
-                'id': footnote_id,
-                'index': i
-            })
-        
-        if footnote_count == 0:
-            errors.append({
-                "type": "info",
-                "category": "Сноски",
-                "message": "Сноски не обнаружены. Убедитесь, что они расставлены через Вставка → Сноска.",
-                "paragraph_idx": -1
-            })
-        else:
-            errors.append({
-                "type": "success",
-                "category": "Сноски",
-                "message": f"Найдено {footnote_count} сносок. Проверьте оформление по ГОСТ.",
-                "paragraph_idx": -1,
-                "footnote_count": footnote_count
-            })
-            
-    except Exception as e:
-        errors.append({
-            "type": "info",
-            "category": "Сноски",
-            "message": f"Не удалось проверить сноски: {str(e)}",
-            "paragraph_idx": -1
-        })
-    
-    return errors, footnote_count, footnote_positions
+def add_error_marker(paragraph, error_msg):
+    """Добавляет видимый маркер ошибки в конец абзаца и красит его"""
+    run = paragraph.add_run(f" [⚠️ ПРОВЕРКА: {error_msg}] ")
+    run.font.color.rgb = RGBColor(255, 0, 0)
+    run.font.bold = True
+    run.font.size = Pt(10)
 
-def count_keywords(kw_text):
-    """Правильно считает ключевые слова"""
-    if not kw_text:
-        return 0
-    
-    # Разбиваем по запятым, точкам с запятой, переносам строк
-    keywords = re.split(r'[,;\n]', kw_text)
-    # Убираем пустые и слишком короткие
-    keywords = [kw.strip() for kw in keywords if kw.strip() and len(kw.strip()) > 2]
-    
-    return len(keywords)
-
-def check_journal_citation(full_text):
-    """Проверяет, правильный ли журнал указан в цитировании"""
-    # Ищем блок цитирования
-    citation_pattern = re.search(
-        r'цитирование[.\s\:]+(.+?)(?=сведения\s+об\s+авторе|$)',
-        full_text,
-        re.IGNORECASE | re.DOTALL
-    )
-    
-    if citation_pattern:
-        citation_text = citation_pattern.group(1)
-        # Проверяем, есть ли название нашего журнала
-        if JOURNAL_NAME.lower() not in citation_text.lower():
-            # Ищем, какой журнал указан
-            journal_match = re.search(r'//\s*(.+?)[\.\d]', citation_text)
-            if journal_match:
-                found_journal = journal_match.group(1).strip()
-                return {
-                    "found": False,
-                    "journal": found_journal,
-                    "expected": JOURNAL_NAME
-                }
-    
-    return {"found": True}
-
-def check_dash_in_bibliography(biblio_text):
-    """Проверяет правильность тире в библиографии"""
-    errors = []
-    
-    # Ищем страницы в формате "С. 162—198" (длинное тире)
-    long_dash_pattern = re.finditer(r'С\.\s*\d+\s*—\s*\d+', biblio_text)
-    
-    for match in long_dash_pattern:
-        errors.append({
-            "type": "warning",
-            "category": "Оформление",
-            "message": f"Использовано длинное тире вместо среднего. Найдено: '{match.group()}', должно быть: '{match.group().replace('—', '–')}'",
-            "paragraph_idx": -1
-        })
-    
-    return errors
-
-def analyze_document(doc: Document, filename: str, use_ai: bool = False) -> dict:
+def analyze_and_modify_document(doc: Document, filename: str) -> tuple:
     errors = []
     checklist = []
     paragraphs = doc.paragraphs
     full_text = "\n".join([p.text.strip() for p in paragraphs])
     
-    error_id = 0
-    error_positions = []  # Для подсветки в тексте
+    # --- 1. Структура и порядок ---
+    indices = {
+        'udk': -1, 'author': -1, 'affiliation': -1, 'title': -1,
+        'abstract': -1, 'keywords': -1, 'citation': -1, 'sources': -1
+    }
+    
+    for i, p in enumerate(paragraphs):
+        text = p.text.lower().strip()
+        if re.match(r'^удк\s+\d', text): indices['udk'] = i
+        if "аннотация" in text and indices['abstract'] == -1: indices['abstract'] = i
+        if "ключевые слова" in text and indices['keywords'] == -1: indices['keywords'] = i
+        if "для цитирования" in text and indices['citation'] == -1: indices['citation'] = i
+        if "список источников" in text or "список литературы" in text: 
+            if indices['sources'] == -1: indices['sources'] = i
 
-    # 1. Проверка УДК
-    udk_match = re.search(r'^УДК\s+(\d[\d\.\-]+)', full_text, re.MULTILINE | re.IGNORECASE)
-    if udk_match:
-        checklist.append({"item": "УДК указан", "status": "success", "details": f"УДК {udk_match.group(1)}"})
+    # УДК
+    if indices['udk'] != -1:
+        checklist.append({"item": "УДК указан", "status": "success", "details": "Найден"})
     else:
-        errors.append({
-            "id": error_id, "type": "error", "category": "УДК",
-            "message": "Не найден индекс УДК в начале статьи.",
-            "paragraph_idx": 0
-        })
-        error_positions.append({"paragraph": 0, "error_id": error_id})
-        error_id += 1
+        errors.append({"type": "error", "category": "Структура", "msg": "Не найден индекс УДК в начале статьи."})
+        checklist.append({"item": "УДК указан", "status": "error", "details": "Не найден"})
 
-    # 2. Проверка DOI
-    doi_match = re.search(r'https?://doi\.org/([\d\.\-]+)', full_text, re.IGNORECASE)
+    # DOI
+    doi_match = re.search(r'https?://doi\.org/10\.24412/2224-5391-\d{4}-\d{2}-\d+', full_text)
     if doi_match:
-        checklist.append({"item": "DOI указан", "status": "success", "details": doi_match.group(0)})
+        checklist.append({"item": "DOI (формат журнала)", "status": "success", "details": "Найден"})
     else:
-        errors.append({
-            "id": error_id, "type": "warning", "category": "DOI",
-            "message": "Не найден DOI.",
-            "paragraph_idx": 0
-        })
-        error_positions.append({"paragraph": 0, "error_id": error_id})
-        error_id += 1
+        errors.append({"type": "warning", "category": "Метаданные", "msg": "DOI не найден или не соответствует формату (должен начинаться с https://doi.org/10.24412/2224-5391-...)"})
+        checklist.append({"item": "DOI (формат журнала)", "status": "warning", "details": "Не найден или неверный формат"})
 
-    # 3. Проверка EDN
-    edn_match = re.search(r'EDN\s+([A-Z]{6})', full_text, re.IGNORECASE)
-    if edn_match:
-        checklist.append({"item": "EDN указан", "status": "success", "details": edn_match.group(1)})
+    # EDN
+    if re.search(r'EDN\s+([А-ЯA-Z]{6}|Х{6})', full_text, re.IGNORECASE):
+        checklist.append({"item": "EDN (рыба)", "status": "success", "details": "Найден"})
     else:
-        checklist.append({"item": "EDN указан", "status": "warning", "details": "Не найден"})
-        error_id += 1
+        errors.append({"type": "warning", "category": "Метаданные", "msg": "Не найдена запись EDN (например, EDN ХХХХХХ)."})
+        checklist.append({"item": "EDN (рыба)", "status": "warning", "details": "Не найдена"})
 
-    # 4. Проверка аннотации
-    annot_pattern = re.search(r'аннотация[.\s\:]*(.+?)(?=ключевые\s+слова|$)', full_text, re.IGNORECASE | re.DOTALL)
-    if annot_pattern:
-        annot_text = annot_pattern.group(1).strip()
-        annot_length = len(annot_text)
-        if 2000 <= annot_length <= 2200:
-            checklist.append({"item": "Аннотация (2000-2200 знаков)", "status": "success", "details": f"{annot_length} знаков"})
-        elif annot_length < 2000:
-            checklist.append({"item": "Аннотация (2000-2200 знаков)", "status": "warning", "details": f"Всего {annot_length} знаков (нужно 2000-2200)"})
-            errors.append({
-                "id": error_id, "type": "warning", "category": "Аннотация",
-                "message": f"Аннотация слишком короткая ({annot_length} знаков). Требуется 2000-2200 знаков.",
-                "paragraph_idx": -1
-            })
-            error_id += 1
+    # Порядок элементов
+    order_ok = True
+    if indices['abstract'] != -1 and indices['keywords'] != -1 and indices['abstract'] > indices['keywords']:
+        order_ok = False
+        errors.append({"type": "error", "category": "Структура", "msg": "Нарушен порядок: 'Ключевые слова' идут перед 'Аннотацией'."})
+        add_error_marker(paragraphs[indices['keywords']], "Порядок нарушен: Аннотация должна быть раньше ключевых слов")
+    
+    if order_ok and indices['abstract'] != -1:
+        checklist.append({"item": "Порядок элементов", "status": "success", "details": "Корректный"})
+    elif indices['abstract'] == -1:
+        errors.append({"type": "error", "category": "Структура", "msg": "Не найдена 'Аннотация'."})
+        checklist.append({"item": "Порядок элементов", "status": "error", "details": "Аннотация не найдена"})
+
+    # Объем аннотации
+    if indices['abstract'] != -1 and indices['keywords'] != -1:
+        abs_text = ""
+        for i in range(indices['abstract'], indices['keywords']):
+            abs_text += paragraphs[i].text
+        abs_len = len(abs_text.replace(" ", "").replace("\n", ""))
+        if 2000 <= abs_len <= 2200:
+            checklist.append({"item": "Аннотация (2000-2200 зн.)", "status": "success", "details": f"{abs_len} знаков"})
         else:
-            checklist.append({"item": "Аннотация (2000-2200 знаков)", "status": "warning", "details": f"{annot_length} знаков (превышение)"})
-    else:
-        checklist.append({"item": "Аннотация (2000-2200 знаков)", "status": "error", "details": "Не найдена"})
-        error_id += 1
+            errors.append({"type": "warning", "category": "Структура", "msg": f"Объем аннотации: {abs_len} знаков. Требуется 2000-2200."})
+            checklist.append({"item": "Аннотация (2000-2200 зн.)", "status": "warning", "details": f"{abs_len} знаков"})
 
-    # 5. Проверка ключевых слов (ИСПРАВЛЕНО!)
-    kw_pattern = re.search(r'ключевые\s+слова[.\s\:]*(.+?)(?=для\s+цитирования|$)', full_text, re.IGNORECASE | re.DOTALL)
-    if kw_pattern:
-        kw_text = kw_pattern.group(1).strip()
-        kw_count = count_keywords(kw_text)  # Правильный подсчет
+    # Ключевые слова (через запятую, 5-10)
+    if indices['keywords'] != -1:
+        kw_text = ""
+        end_idx = indices['citation'] if indices['citation'] != -1 else len(paragraphs)
+        for i in range(indices['keywords'], end_idx):
+            kw_text += paragraphs[i].text
+            if "Для цитирования" in paragraphs[i].text or "для цитирования" in paragraphs[i].text:
+                break
         
-        if 5 <= kw_count <= 10:
-            checklist.append({"item": "Ключевые слова (5-10)", "status": "success", "details": f"{kw_count} слов"})
+        kw_list = [kw.strip() for kw in kw_text.replace("Ключевые слова:", "").replace("Ключевые слова", "").split(',') if kw.strip()]
+        if 5 <= len(kw_list) <= 10:
+            checklist.append({"item": "Ключевые слова (5-10, через запятую)", "status": "success", "details": f"{len(kw_list)} слов"})
         else:
-            checklist.append({"item": "Ключевые слова (5-10)", "status": "warning", "details": f"{kw_count} слов (нужно 5-10)"})
-    else:
-        checklist.append({"item": "Ключевые слова (5-10)", "status": "error", "details": "Не найдены"})
-        error_id += 1
+            errors.append({"type": "warning", "category": "Структура", "msg": f"Ключевых слов: {len(kw_list)}. Требуется 5-10, разделенных запятыми."})
+            checklist.append({"item": "Ключевые слова (5-10, через запятую)", "status": "warning", "details": f"{len(kw_list)} слов"})
 
-    # 6. Проверка шрифта
+    # Цитирование и название журнала
+    if indices['citation'] != -1:
+        cit_text = ""
+        for i in range(indices['citation'], min(indices['citation']+3, len(paragraphs))):
+            cit_text += paragraphs[i].text
+        if "Вестник Екатеринбургской духовной семинарии" in cit_text or "Vestnik Ekaterinburgskoi dukhovnoi seminarii" in cit_text:
+            checklist.append({"item": "Название журнала в цитировании", "status": "success", "details": "Верно"})
+        else:
+            errors.append({"type": "error", "category": "Цитирование", "msg": "В блоке 'Для цитирования' не указано название 'Вестник Екатеринбургской духовной семинарии'."})
+            add_error_marker(paragraphs[indices['citation']], "Укажите правильное название журнала")
+            checklist.append({"item": "Название журнала в цитировании", "status": "error", "details": "Неверно или не найдено"})
+    else:
+        errors.append({"type": "error", "category": "Структура", "msg": "Не найден блок 'Для цитирования'."})
+        checklist.append({"item": "Для цитирования", "status": "error", "details": "Не найден"})
+
+    # Даты поступления
+    if re.search(r'Поступила в редакцию \d{2}\.\d{2}\.\d{4}', full_text) and re.search(r'Принята к публикации \d{2}\.\d{2}\.\d{4}', full_text):
+        checklist.append({"item": "Даты поступления/принятия (рыба)", "status": "success", "details": "Найдены"})
+    else:
+        errors.append({"type": "warning", "category": "Метаданные", "msg": "Не найдены строки 'Поступила в редакцию 00.00.0000' и 'Принята к публикации 00.00.0000'."})
+        checklist.append({"item": "Даты поступления/принятия (рыба)", "status": "warning", "details": "Не найдены"})
+
+    # --- 2. Типографика ---
     font_issues = []
     for i, p in enumerate(paragraphs):
         if len(p.text.strip()) > 50:
             for run in p.runs:
-                text = run.text.strip()
-                if not text or is_church_slavonic_or_greek(text):
+                if not run.text.strip() or is_church_slavonic_or_greek(run.text):
                     continue
-                
                 if run.font.name and run.font.name not in ['Times New Roman', 'Times', None]:
                     font_issues.append(f"шрифт '{run.font.name}'")
                     break
@@ -273,290 +203,105 @@ def analyze_document(doc: Document, filename: str, use_ai: bool = False) -> dict
     if not font_issues:
         checklist.append({"item": "Шрифт Times New Roman 12 пт", "status": "success", "details": "Соответствует"})
     else:
-        unique_issues = list(set(font_issues))[:3]
+        unique_issues = list(set(font_issues))[:2]
+        errors.append({"type": "warning", "category": "Типографика", "msg": f"Несоответствие шрифта/размера (например: {', '.join(unique_issues)}). Исключение: греческий/церковнославянский."})
         checklist.append({"item": "Шрифт Times New Roman 12 пт", "status": "warning", "details": f"Найдено: {', '.join(unique_issues)}"})
 
-    # 7. Проверка сносок
-    footnote_errors, footnote_count, footnote_positions = check_footnotes(doc)
-    errors.extend(footnote_errors)
-    if footnote_count > 0:
-        checklist.append({"item": "Сноски оформлены", "status": "success", "details": f"{footnote_count} сносок"})
+    # Инициалы и неразрывные пробелы
+    if re.search(r'[А-Я]\.[А-Я]\.', full_text):
+        errors.append({"type": "warning", "category": "Типографика", "msg": "Между инициалами обнаружены обычные пробелы или их отсутствие. Рекомендуется использовать неразрывный пробел (Ctrl+Shift+Space)."})
+        checklist.append({"item": "Неразрывные пробелы в инициалах", "status": "warning", "details": "Найдены обычные пробелы"})
     else:
-        checklist.append({"item": "Сноски оформлены", "status": "warning", "details": "Не обнаружены"})
+        checklist.append({"item": "Неразрывные пробелы в инициалах", "status": "success", "details": "Проверено"})
 
-    # 8. Проверка списка литературы
-    biblio_patterns = [
-        r'(источники|литература|список\s+литературы|библиографический\s+список)',
-        r'references'
-    ]
-    biblio_found = False
-    biblio_start_idx = -1
-    
-    for i, p in enumerate(paragraphs):
-        for pattern in biblio_patterns:
-            if re.search(pattern, p.text, re.IGNORECASE):
-                biblio_found = True
-                biblio_start_idx = i
-                break
-        if biblio_found:
-            break
-    
-    if biblio_found:
-        checklist.append({"item": "Список литературы", "status": "success", "details": "Найден"})
-        
-        # Проверяем тире в библиографии (ИСПРАВЛЕНО!)
-        if biblio_start_idx >= 0:
-            biblio_text = "\n".join([p.text for p in paragraphs[biblio_start_idx:]])
-            dash_errors = check_dash_in_bibliography(biblio_text)
-            for err in dash_errors:
-                err["id"] = error_id
-                errors.append(err)
-                error_id += 1
+    # Тире
+    long_dash_in_bib = re.search(r'С\.\s*\d+\s*—\s*\d+', full_text)
+    if long_dash_in_bib:
+        errors.append({"type": "warning", "category": "Типографика", "msg": "В диапазоне страниц обнаружено длинное тире (—). По правилам должно быть среднее тире (–)."})
+        checklist.append({"item": "Среднее тире в диапазонах", "status": "warning", "details": "Найдено длинное тире"})
     else:
-        checklist.append({"item": "Список литературы", "status": "error", "details": "Не найден"})
-        error_id += 1
+        checklist.append({"item": "Среднее тире в диапазонах", "status": "success", "details": "Соответствует"})
 
-    # 9. Проверка названия журнала в цитировании (НОВОЕ!)
-    journal_check = check_journal_citation(full_text)
-    if not journal_check.get("found", True):
-        errors.append({
-            "id": error_id,
-            "type": "error",
-            "category": "Цитирование",
-            "message": f"В цитировании указан другой журнал: \"{journal_check['journal']}\". Статья подается в \"{JOURNAL_NAME}\".",
-            "paragraph_idx": -1
-        })
-        error_id += 1
-
-    # 10. Проверка орфографии через LanguageTool (ИСПРАВЛЕНО!)
-    main_text = extract_main_text(paragraphs)
-    if main_text:
-        grammar_errors = check_grammar_languagetool(main_text)
-        for err in grammar_errors[:20]:
-            # Пропускаем библейские сокращения
-            context = err.get('context', '')
-            skip_error = False
-            
-            for bible_abbr in BIBLE_ABBREVIATIONS:
-                if bible_abbr in context:
-                    skip_error = True
-                    break
-            
-            if not skip_error:
-                errors.append({
-                    "id": error_id, "type": "warning", "category": "Грамматика/Орфография",
-                    "message": f"{err['message']} (пример: '{err['context'][:100]}')",
-                    "suggestions": err.get('replacements', []),
-                    "paragraph_idx": -1
-                })
-                error_id += 1
-
-    # 11. AI-проверка (если включено)
-    ai_analysis = None
-    if use_ai and DEEPSEEK_API_KEY:
-        try:
-            ai_analysis = check_with_deepseek(full_text, main_text)
-            if ai_analysis and 'issues' in ai_analysis:
-                for issue in ai_analysis.get('issues', [])[:10]:
-                    errors.append({
-                        "id": error_id, "type": issue.get('type', 'warning'), 
-                        "category": "AI-анализ",
-                        "message": issue.get('message', ''),
-                        "paragraph_idx": -1
-                    })
-                    error_id += 1
-                checklist.append({
-                    "item": "AI-проверка качества", 
-                    "status": "success" if not ai_analysis.get('critical_issues') else "warning",
-                    "details": f"Найдено замечаний: {len(ai_analysis.get('issues', []))}"
-                })
-        except Exception as e:
-            errors.append({
-                "id": error_id, "type": "info", "category": "AI",
-                "message": f"Не удалось выполнить AI-проверку: {str(e)}",
-                "paragraph_idx": -1
-            })
-            error_id += 1
-
-    article_html = generate_article_html_with_errors(paragraphs, errors, footnote_positions)
-
-    return {
-        "filename": filename,
-        "is_valid": len([e for e in errors if e["type"] == "error"]) == 0,
-        "errors": errors,
-        "article_html": article_html,
-        "checklist": checklist,
-        "total_errors": len([e for e in errors if e["type"] == "error"]),
-        "total_warnings": len([e for e in errors if e["type"] == "warning"]),
-        "ai_analysis": ai_analysis,
-        "error_positions": error_positions
-    }
-
-def check_grammar_languagetool(text):
-    """Проверка орфографии и пунктуации через LanguageTool API"""
-    try:
-        url = "https://api.languagetool.org/v2/check"
-        data = {
-            "text": text[:10000],
-            "language": "ru-RU",
-            "enabledOnly": "false",
-            "disabledCategories": "RU_COMPOUND_WORDS"  # Отключаем некоторые ложные срабатывания
-        }
-        response = requests.post(url, data=data, timeout=10)
-        result = response.json()
-        
-        errors = []
-        for match in result.get('matches', []):
-            # Пропускаем некоторые типы ошибок
-            if match.get('rule', {}).get('id') in ['RU_SENTENCE_WHITESPACE', 'WHITESPACE_RULE']:
-                # Проверяем, не является ли это новым абзацем
-                context = match.get('context', {}).get('text', '')
-                if '.\n' in context or '?\n' in context or '!\n' in context:
-                    continue  # Это новый абзац, не ошибка
-            
-            errors.append({
-                "message": match.get('message', ''),
-                "context": match.get('context', {}).get('text', ''),
-                "replacements": [r.get('value', '') for r in match.get('replacements', [])[:3]],
-                "offset": match.get('offset', 0),
-                "length": match.get('errorLength', 0)
-            })
-        
-        return errors
-    except Exception as e:
-        print(f"LanguageTool error: {e}")
-        return []
-
-def check_with_deepseek(full_text: str, main_text: str) -> dict:
-    """Проверка статьи через DeepSeek AI"""
-    
-    prompt = f"""Проверь текст статьи на ошибки. Найди:
-1. Орфографические и пунктуационные ошибки
-2. Грамматические ошибки
-3. Стилистические проблемы
-4. Логические несоответствия
-
-Текст:
-{main_text[:6000]}
-
-Верни JSON:
-{{"issues": [{{"type": "error или warning", "message": "описание"}}], "critical_issues": true или false}}
-
-Найди конкретные ошибки. Игнорируй церковнославянизмы и библейские сокращения."""
-
-    try:
-        headers = {
-            "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
-            "Content-Type": "application/json"
-        }
-        
-        payload = {
-            "model": "deepseek-chat",
-            "messages": [
-                {"role": "system", "content": "Ты редактор научного журнала. Отвечай только валидным JSON."},
-                {"role": "user", "content": prompt}
-            ],
-            "temperature": 0.3
-        }
-        
-        response = requests.post(DEEPSEEK_API_URL, json=payload, headers=headers, timeout=30)
-        response.raise_for_status()
-        
-        result = response.json()
-        content = result['choices'][0]['message']['content']
-        
-        try:
-            return json.loads(content)
-        except:
-            return {"issues": [{"type": "warning", "message": content}], "critical_issues": False}
-        
-    except Exception as e:
-        return {"issues": [], "critical_issues": False, "error": str(e)}
-
-def generate_article_html_with_errors(paragraphs, errors, footnote_positions):
-    """Генерирует HTML с сохранением форматирования и подсветкой ошибок"""
-    html_parts = []
-    
-    # Создаем словарь ошибок по индексам абзацев
-    errors_by_paragraph = {}
-    for err in errors:
-        p_idx = err.get('paragraph_idx', -1)
-        if p_idx not in errors_by_paragraph:
-            errors_by_paragraph[p_idx] = []
-        errors_by_paragraph[p_idx].append(err)
-    
-    # Создаем множество позиций сносок для отображения
-    footnote_ids = {fp.get('id') for fp in footnote_positions} if footnote_positions else set()
-    
-    for i, p in enumerate(paragraphs):
-        if not p.text.strip():
-            continue
-        
-        # Сохраняем форматирование
-        paragraph_html = ""
-        for run in p.runs:
-            text = run.text
-            if not text:
-                continue
-            
-            # Проверяем, есть ли здесь сноска
-            if 'w:footnoteReference' in run._element.xml:
-                # Добавляем маркер сноски
-                footnote_num = len([fp for fp in footnote_positions if fp.get('index') == len([x for x in paragraph_html if x == '†'])])
-                paragraph_html += f'<sup style="color: #800020; cursor: pointer;" title="Сноска">†</sup>'
-            
-            style = ""
-            if run.font.bold:
-                style += "font-weight: bold; "
-            if run.font.italic:
-                style += "font-style: italic; "
-            if run.font.underline:
-                style += "text-decoration: underline; "
-            
-            if style:
-                paragraph_html += f'<span style="{style}">{text}</span>'
-            else:
-                paragraph_html += text
-        
-        paragraph_errors = errors_by_paragraph.get(i, [])
-        
-        if paragraph_errors:
-            error_classes = ' '.join([f"error-{err['id']}" for err in paragraph_errors])
-            has_critical = any(err['type'] == 'error' for err in paragraph_errors)
-            class_type = "critical" if has_critical else ""
-            
-            # Собираем все сообщения об ошибках
-            error_messages = [f"{err['category']}: {err['message']}" for err in paragraph_errors]
-            tooltip_content = '<br>'.join(error_messages)
-            
-            html_parts.append(f'''
-                <div class="paragraph error {class_type} {error_classes}" 
-                     data-error-ids="{','.join(str(err['id']) for err in paragraph_errors)}"
-                     title="{tooltip_content}">
-                    {paragraph_html}
-                </div>
-            ''')
+    # --- 3. Сноски ---
+    footnote_refs = doc.element.body.findall('.//' + qn('w:footnoteReference'))
+    if len(footnote_refs) > 0:
+        checklist.append({"item": "Наличие сносок в тексте", "status": "success", "details": f"Найдено {len(footnote_refs)}"})
+        # Проверка на концевые сноски (упрощенная)
+        endnotes = doc.element.body.findall('.//' + qn('w:endnoteReference'))
+        if len(endnotes) > 0:
+            errors.append({"type": "error", "category": "Сноски", "msg": "Обнаружены концевые сноски. Требуются постраничные (Вставка -> Сноска)."})
+            checklist.append({"item": "Тип сносок (постраничные)", "status": "error", "details": "Найдены концевые"})
         else:
-            html_parts.append(f'<div class="paragraph">{paragraph_html}</div>')
+            checklist.append({"item": "Тип сносок (постраничные)", "status": "success", "details": "Соответствует"})
+    else:
+        errors.append({"type": "warning", "category": "Сноски", "msg": "В тексте не найдены автоматические сноски. Убедитесь, что они расставлены через меню 'Вставка -> Сноска'."})
+        checklist.append({"item": "Наличие сносок в тексте", "status": "warning", "details": "Не найдены"})
+
+    # --- 4. Богословская специфика и Орфография ---
+    # Ссылка на азбуку сокращений
+    errors.append({"type": "info", "category": "Богословие", "msg": "Проверьте общепринятые сокращения имен святых и терминов: https://azbyka.ru/otechnik/Spravochniki/obsheprinjatye-sokrashenija-tserkovnyh-terminov/"})
     
-    return ''.join(html_parts)
+    # Проверка формата ссылок на Библию
+    bible_bad_format = re.search(r'\([А-Я][а-я]+\.\d+:\d+', full_text) # Например (Мф.1:1)
+    if bible_bad_format:
+        errors.append({"type": "warning", "category": "Богословие", "msg": "Обнаружен возможный неверный формат ссылки на Библию (например, 'Мф.1:1'). Правильный формат: '(Мф 1. 18–20)'."})
 
-def extract_main_text(paragraphs):
-    in_body = False
-    text_parts = []
-    for p in paragraphs:
-        lower_text = p.text.lower().strip()
-        if "ключевые слова" in lower_text or "keywords" in lower_text:
-            in_body = True
-            continue
-        if re.search(r'(список\s+литературы|источники|references|литература)', lower_text):
-            in_body = False
-            break
-        if in_body and len(p.text.strip()) > 20:
-            text_parts.append(p.text)
-    return " ".join(text_parts)
+    # Яндекс Спеллер
+    main_text = " ".join([p.text for p in paragraphs if len(p.text.strip()) > 50])
+    spelling_errors = []
+    if main_text:
+        try:
+            url = "https://speller.yandex.net/services/spellservice.json/checkText"
+            response = requests.post(url, data={"text": main_text[:10000], "lang": "ru"}, timeout=5)
+            results = response.json()
+            for res in results:
+                word = res.get('word', '')
+                # Фильтр: игнорируем библейские сокращения и церковнославянские слова
+                if any(abbr in word for abbr in BIBLE_ABBR) or is_church_slavonic_or_greek(word):
+                    continue
+                
+                # Фильтр: игнорируем ошибки, если в контексте есть церковнославянские окончания
+                context = res.get('context', {}).get('text', '')
+                if is_church_slavonic_or_greek(context):
+                    continue
 
-# Для запуска локально
+                spelling_errors.append(f"'{word}' -> {', '.join(res.get('s', [])[:2])}")
+            
+            if spelling_errors:
+                errors.append({"type": "warning", "category": "Орфография", "msg": f"Возможные ошибки: {', '.join(spelling_errors[:5])}... (Церковнославянские слова игнорируются, но проверьте их вручную)."})
+                if any(is_church_slavonic_or_greek(main_text)):
+                     errors.append({"type": "info", "category": "Орфография", "msg": "Обнаружен текст, похожий на церковнославянский. Автоматическая проверка для него не применялась. Пожалуйста, проверьте правильность написания вручную."})
+        except Exception:
+            pass # Игнорируем ошибки сети
+
+    # --- 5. Генерация отчета в конце документа ---
+    doc.add_page_break()
+    h = doc.add_heading('📝 ОТЧЕТ АВТОМАТИЧЕСКОЙ ПРОВЕРКИ (Вестник ЕДС)', level=1)
+    h.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    
+    if not errors:
+        p = doc.add_paragraph("✅ Грубых нарушений правил оформления не выявлено. Пожалуйста, сверьтесь с чек-листом на сайте.")
+        p.runs[0].font.color.rgb = RGBColor(0, 128, 0)
+    else:
+        for err in errors:
+            icon = "❌" if err['type'] == 'error' else ("⚠️" if err['type'] == 'warning' else "ℹ️")
+            p = doc.add_paragraph(f"{icon} [{err['category'].upper()}] {err['msg']}")
+            if err['type'] == 'error':
+                p.runs[0].font.color.rgb = RGBColor(255, 0, 0)
+                p.runs[0].font.bold = True
+            elif err['type'] == 'warning':
+                p.runs[0].font.color.rgb = RGBColor(255, 140, 0)
+
+    p = doc.add_paragraph("\nПримечание: Красные маркеры [⚠️ ПРОВЕРКА: ...] в тексте статьи указывают на конкретные места, требующие внимания.")
+    p.runs[0].font.italic = True
+
+    report = {
+        "is_valid": not any(e['type'] == 'error' for e in errors),
+        "errors": errors,
+        "checklist": checklist
+    }
+    return report, doc
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
