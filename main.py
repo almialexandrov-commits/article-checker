@@ -6,9 +6,9 @@ from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from docx import Document
-from docx.shared import Pt
+from docx.shared import Pt, RGBColor
+from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml.ns import qn
-from lxml import etree
 
 app = FastAPI()
 
@@ -56,65 +56,33 @@ async def download_file(file_id: str):
         raise HTTPException(status_code=404, detail="Файл не найден")
     return FileResponse(file_path, filename="article_checked.docx", media_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document')
 
-def add_word_comment(paragraph, comment_text, comment_id):
-    """
-    Добавляет нативный комментарий Word к абзацу через lxml
-    """
-    try:
-        # Получаем доступ к части документа с комментариями
-        comments_part = paragraph.part.related_parts.get('comments')
-        if comments_part is None:
-            # Если части комментариев нет, создаем её
-            from docx.opc.constants import RELATIONSHIP_TYPE
-            comments_part = paragraph.part.package.part_related_parts.get(RELATIONSHIP_TYPE.COMMENTS)
-            if comments_part is None:
-                # Не удалось создать часть комментариев, пропускаем
-                return comment_id + 1
-        
-        # Создаем XML элемент комментария
-        comment_xml = etree.Element('{http://schemas.openxmlformats.org/wordprocessingml/2006/main}comment', {
-            '{http://schemas.openxmlformats.org/wordprocessingml/2006/main}id': str(comment_id),
-            '{http://schemas.openxmlformats.org/wordprocessingml/2006/main}author': 'Автоматическая проверка',
-        })
-        
-        # Добавляем текст комментария
-        p_xml = etree.SubElement(comment_xml, '{http://schemas.openxmlformats.org/wordprocessingml/2006/main}p')
-        r_xml = etree.SubElement(p_xml, '{http://schemas.openxmlformats.org/wordprocessingml/2006/main}r')
-        t_xml = etree.SubElement(r_xml, '{http://schemas.openxmlformats.org/wordprocessingml/2006/main}t')
-        t_xml.text = comment_text
-        
-        # Добавляем комментарий в документ
-        comments_part.element.append(comment_xml)
-        
-        # Добавляем ссылку на комментарий в абзац
-        p_element = paragraph._element
-        comment_range_start = etree.Element('{http://schemas.openxmlformats.org/wordprocessingml/2006/main}commentRangeStart', {
-            '{http://schemas.openxmlformats.org/wordprocessingml/2006/main}id': str(comment_id)
-        })
-        p_element.insert(0, comment_range_start)
-        
-        comment_range_end = etree.Element('{http://schemas.openxmlformats.org/wordprocessingml/2006/main}commentRangeEnd', {
-            '{http://schemas.openxmlformats.org/wordprocessingml/2006/main}id': str(comment_id)
-        })
-        p_element.append(comment_range_end)
-        
-        comment_ref = etree.Element('{http://schemas.openxmlformats.org/wordprocessingml/2006/main}r')
-        comment_ref_xml = etree.SubElement(comment_ref, '{http://schemas.openxmlformats.org/wordprocessingml/2006/main}commentReference', {
-            '{http://schemas.openxmlformats.org/wordprocessingml/2006/main}id': str(comment_id)
-        })
-        p_element.append(comment_ref)
-        
-        return comment_id + 1
-    except Exception as e:
-        print(f"Error adding comment: {e}")
-        return comment_id + 1
+def add_error_marker(paragraph, error_msg, error_type="error"):
+    """Добавляет маркер ошибки в конец абзаца с цветовым выделением"""
+    run = paragraph.add_run(f" [{error_msg}]")
+    if error_type == "error":
+        run.font.color.rgb = RGBColor(255, 0, 0)  # Красный для ошибок
+    elif error_type == "warning":
+        run.font.color.rgb = RGBColor(255, 140, 0)  # Оранжевый для предупреждений
+    else:
+        run.font.color.rgb = RGBColor(0, 100, 200)  # Синий для инфо
+    run.font.bold = True
+    run.font.size = Pt(10)
+
+def is_church_slavonic_or_greek(text):
+    """Проверяет церковнославянские и греческие символы"""
+    if re.search(r'[\u0370-\u03FF\u1F00-\u1FFF]', text):
+        return True  # Греческий
+    if re.search(r'[ѣѢѳѲѵѧѩѫѭѯѱ\u0480-\u04FF]', text):
+        return True  # Церковнославянский
+    if re.search(r'\b\w+(овъ|евъ|інъ|їнъ|іе|їе|h)\b', text, re.IGNORECASE):
+        return True
+    return False
 
 def analyze_and_modify_document(doc: Document, filename: str) -> tuple:
     errors = []
     checklist = []
     paragraphs = doc.paragraphs
     full_text = "\n".join([p.text.strip() for p in paragraphs])
-    comment_id = 1
     
     # --- 1. Структура и порядок ---
     indices = {
@@ -124,14 +92,18 @@ def analyze_and_modify_document(doc: Document, filename: str) -> tuple:
     
     for i, p in enumerate(paragraphs):
         text = p.text.lower().strip()
-        if re.match(r'^удк\s+\d', text): indices['udk'] = i
-        if "аннотация" in text and indices['abstract'] == -1: indices['abstract'] = i
-        if "ключевые слова" in text and indices['keywords'] == -1: indices['keywords'] = i
+        if re.match(r'^удк\s+\d', text):
+            indices['udk'] = i
+        if "аннотация" in text and indices['abstract'] == -1:
+            indices['abstract'] = i
+        if "ключевые слова" in text and indices['keywords'] == -1:
+            indices['keywords'] = i
         # ИСПРАВЛЕНО: ищем и "Для цитирования", и просто "Цитирование"
-        if ("для цитирования" in text or text.startswith("цитирование")) and indices['citation'] == -1: 
+        if ("для цитирования" in text or text.startswith("цитирование")) and indices['citation'] == -1:
             indices['citation'] = i
-        if "список источников" in text or "список литературы" in text: 
-            if indices['sources'] == -1: indices['sources'] = i
+        if "список источников" in text or "список литературы" in text:
+            if indices['sources'] == -1:
+                indices['sources'] = i
 
     # УДК
     if indices['udk'] != -1:
@@ -160,7 +132,7 @@ def analyze_and_modify_document(doc: Document, filename: str) -> tuple:
     if indices['abstract'] != -1 and indices['keywords'] != -1 and indices['abstract'] > indices['keywords']:
         order_ok = False
         errors.append({"type": "error", "category": "Структура", "msg": "Нарушен порядок: 'Ключевые слова' идут перед 'Аннотацией'."})
-        comment_id = add_word_comment(paragraphs[indices['keywords']], "Порядок нарушен: Аннотация должна быть раньше ключевых слов", comment_id)
+        add_error_marker(paragraphs[indices['keywords']], "Порядок нарушен: Аннотация должна быть раньше ключевых слов", "error")
     
     if order_ok and indices['abstract'] != -1:
         checklist.append({"item": "Порядок элементов", "status": "success", "details": "Корректный"})
@@ -207,7 +179,7 @@ def analyze_and_modify_document(doc: Document, filename: str) -> tuple:
             errors.append({"type": "warning", "category": "Структура", "msg": f"Ключевых слов: {len(kw_list)}. Требуется 5-10, разделенных запятыми."})
             checklist.append({"item": "Ключевые слова (5-10, через запятую)", "status": "warning", "details": f"{len(kw_list)} слов"})
             if indices['keywords'] != -1:
-                comment_id = add_word_comment(paragraphs[indices['keywords']], f"Ключевых слов: {len(kw_list)}. Требуется 5-10.", comment_id)
+                add_error_marker(paragraphs[indices['keywords']], f"Ключевых слов: {len(kw_list)}. Требуется 5-10.", "warning")
     else:
         checklist.append({"item": "Ключевые слова (5-10, через запятую)", "status": "error", "details": "Не найдены"})
 
@@ -220,7 +192,7 @@ def analyze_and_modify_document(doc: Document, filename: str) -> tuple:
             checklist.append({"item": "Название журнала в цитировании", "status": "success", "details": "Верно"})
         else:
             errors.append({"type": "error", "category": "Цитирование", "msg": "В блоке 'Цитирование' не указано название 'Вестник Екатеринбургской духовной семинарии'."})
-            comment_id = add_word_comment(paragraphs[indices['citation']], "Укажите правильное название журнала", comment_id)
+            add_error_marker(paragraphs[indices['citation']], "Укажите правильное название журнала", "error")
             checklist.append({"item": "Название журнала в цитировании", "status": "error", "details": "Неверно или не найдено"})
     else:
         errors.append({"type": "error", "category": "Структура", "msg": "Не найден блок 'Цитирование' или 'Для цитирования'."})
@@ -269,7 +241,7 @@ def analyze_and_modify_document(doc: Document, filename: str) -> tuple:
     else:
         checklist.append({"item": "Среднее тире в диапазонах", "status": "success", "details": "Соответствует"})
 
-    # --- 3. Сноски ---
+    # --- 3. Сноски (ИСПРАВЛЕНО!) ---
     footnote_refs = doc.element.body.findall('.//' + qn('w:footnoteReference'))
     if len(footnote_refs) > 0:
         checklist.append({"item": "Наличие сносок в тексте", "status": "success", "details": f"Найдено {len(footnote_refs)}"})
@@ -315,7 +287,8 @@ def analyze_and_modify_document(doc: Document, filename: str) -> tuple:
 
     # --- 5. Генерация отчета в конце документа ---
     doc.add_page_break()
-    h = doc.add_heading('📝 ОТЧЕТ АВТОМАТИЧЕСКОЙ ПРОВЕРКИ (Вестник ЕДС)', level=1)
+    h = doc.add_heading(' ОТЧЕТ АВТОМАТИЧЕСКОЙ ПРОВЕРКИ (Вестник ЕДС)', level=1)
+    h.alignment = WD_ALIGN_PARAGRAPH.CENTER
     
     if not errors:
         p = doc.add_paragraph("✅ Грубых нарушений правил оформления не выявлено.")
@@ -323,6 +296,11 @@ def analyze_and_modify_document(doc: Document, filename: str) -> tuple:
         for err in errors:
             icon = "❌" if err['type'] == 'error' else ("⚠️" if err['type'] == 'warning' else "ℹ️")
             p = doc.add_paragraph(f"{icon} [{err['category'].upper()}] {err['msg']}")
+            if err['type'] == 'error':
+                p.runs[0].font.color.rgb = RGBColor(255, 0, 0)
+                p.runs[0].font.bold = True
+            elif err['type'] == 'warning':
+                p.runs[0].font.color.rgb = RGBColor(255, 140, 0)
 
     report = {
         "is_valid": not any(e['type'] == 'error' for e in errors),
@@ -330,12 +308,6 @@ def analyze_and_modify_document(doc: Document, filename: str) -> tuple:
         "checklist": checklist
     }
     return report, doc
-
-def is_church_slavonic_or_greek(text):
-    if re.search(r'[\u0370-\u03FF\u1F00-\u1FFF]', text): return True
-    if re.search(r'[ѣѢѳѲѵѴѧѩѫѭѯѱ\u0480-\u04FF]', text): return True
-    if re.search(r'\b\w+(овъ|евъ|інъ|їнъ|іе|їе|h)\b', text, re.IGNORECASE): return True
-    return False
 
 if __name__ == "__main__":
     import uvicorn
