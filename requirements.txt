@@ -3,3 +3,4 @@ uvicorn
 python-docx
 python-multipart
 requests
+lxml
